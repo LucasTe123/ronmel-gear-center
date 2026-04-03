@@ -96,17 +96,18 @@ export default function HomeScreen({ navigation }) {
         </View>
 
         {/* Acciones */}
-        <Text style={styles.seccionTitulo}>Acciones</Text>
-        <BigButton
-          titulo="Ver Inventario"
-          onPress={() => navigation.navigate('Inventario')}
-          color={COLORS.secundario}
-        />
-        <BigButton
-          titulo="Registrar Venta"
-          onPress={() => navigation.navigate('Ventas')}
-          color={COLORS.acento}
-        />
+<Text style={styles.seccionTitulo}>Acciones</Text>
+<BigButton
+  titulo="Ver Inventario"
+  onPress={() => navigation.navigate('Inventario')}
+  variante="glass"
+/>
+<BigButton
+  titulo="Registrar Venta"
+  onPress={() => navigation.navigate('Ventas')}
+  variante="solido"
+  color={COLORS.acento}
+/>
 
       </View>
     </ScrollView>

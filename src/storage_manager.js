@@ -86,3 +86,13 @@ export async function registrarVenta(venta) {
   await AsyncStorage.setItem(KEYS.ventas, JSON.stringify(ventas));
   return nueva;
 }
+// Eliminar una venta por ID
+export async function eliminarVenta(id) {
+  try {
+    const ventas = await getVentas();
+    const filtradas = ventas.filter(v => v.id !== id);
+    await AsyncStorage.setItem(KEYS.ventas, JSON.stringify(filtradas));
+  } catch (e) {
+    console.log('Error eliminando venta', e);
+  }
+}

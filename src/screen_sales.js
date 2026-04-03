@@ -1,20 +1,115 @@
 // ============================================
 // SCREEN_SALES.JS - Pantalla de ventas
-// Aquí se registran ventas y se ve el historial
+// Con swipe para borrar ventas individuales
 // ============================================
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useRef } from 'react';
 import {
-  View, Text, StyleSheet, FlatList,
-  TouchableOpacity, Modal, ScrollView,
-  Alert, ActivityIndicator
+  View, Text, StyleSheet, TouchableOpacity,
+  Modal, ScrollView, Alert, ActivityIndicator, Animated,
 } from 'react-native';
+import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from './colors_config';
 import { getProductos } from './logic_inventory';
 import { venderProducto, getVentasHoy, getResumenVentas } from './logic_sales';
+import { eliminarVenta } from './storage_manager'; // para borrar venta individual
 
+// ============================================
+// FILA DE VENTA CON SWIPE PARA BORRAR
+// ============================================
+function FilaVenta({ item, onEliminar }) {
+  const swipeableRef = useRef(null);
+
+  const renderBotonBorrar = (progress, dragX) => {
+    const escalaX = dragX.interpolate({
+      inputRange: [-160, -80, 0],
+      outputRange: [1.5, 1, 1],
+      extrapolate: 'clamp',
+    });
+
+    return (
+      // backgroundColor igual al fondo → el cuadrado se camufla
+      <View style={estilosVenta.contenedorBorrar}>
+        <Animated.View style={[
+          estilosVenta.circuloBorrar,
+          { transform: [{ scaleX: escalaX }] }
+        ]}>
+          <TouchableOpacity
+            onPress={() => {
+              swipeableRef.current?.close();
+              onEliminar(item);
+            }}
+            style={estilosVenta.botonInterior}
+          >
+            <Ionicons name="trash" size={20} color="#fff" />
+          </TouchableOpacity>
+        </Animated.View>
+      </View>
+    );
+  };
+
+  const hora = new Date(item.fecha).toLocaleTimeString([], {
+    hour: '2-digit', minute: '2-digit'
+  });
+
+  return (
+    <Swipeable
+      ref={swipeableRef}
+      renderRightActions={renderBotonBorrar}
+      overshootRight={true}
+      overshootFriction={3}
+      friction={2}
+      rightThreshold={50}
+      overshootLeft={false}
+      leftThreshold={99999}
+      // SIN onSwipeableOpen — no borra automático
+    >
+      <View style={estilosVenta.fila}>
+        <View style={{ flex: 1 }}>
+          <Text style={estilosVenta.nombre}>{item.nombreProducto}</Text>
+          <Text style={estilosVenta.hora}>
+            {hora} · {item.cantidad} unidad{item.cantidad > 1 ? 'es' : ''}
+          </Text>
+        </View>
+        <Text style={estilosVenta.ganancia}>+Bs {item.ganancia}</Text>
+      </View>
+    </Swipeable>
+  );
+}
+
+const estilosVenta = StyleSheet.create({
+  fila: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingVertical: 14, paddingHorizontal: 4,
+    backgroundColor: COLORS.fondo, // mismo fondo para que el swipe no corte
+  },
+  nombre: { fontSize: 15, fontWeight: '500', color: COLORS.textoBlanco },
+  hora: { fontSize: 12, color: COLORS.textoGris, marginTop: 2 },
+  ganancia: { fontSize: 16, fontWeight: '600', color: COLORS.exito },
+
+  // Mismo truco: backgroundColor = fondo → cuadrado invisible
+  contenedorBorrar: {
+    width: 80,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.fondo,
+  },
+  circuloBorrar: {
+    width: 46, height: 46, borderRadius: 23,
+    backgroundColor: '#FF3B30',
+    alignItems: 'center', justifyContent: 'center',
+  },
+  botonInterior: {
+    width: 46, height: 46, borderRadius: 23,
+    alignItems: 'center', justifyContent: 'center',
+  },
+});
+
+// ============================================
+// PANTALLA PRINCIPAL
+// ============================================
 export default function VentasScreen() {
   const [productos, setProductos] = useState([]);
   const [ventasHoy, setVentasHoy] = useState([]);
@@ -24,11 +119,8 @@ export default function VentasScreen() {
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState(1);
 
-  // Recargar datos cada vez que entras a esta pantalla
   useFocusEffect(
-    useCallback(() => {
-      cargarDatos();
-    }, [])
+    useCallback(() => { cargarDatos(); }, [])
   );
 
   async function cargarDatos() {
@@ -56,165 +148,150 @@ export default function VentasScreen() {
       Alert.alert('Cantidad inválida', 'La cantidad debe ser al menos 1.');
       return;
     }
-
     const resultado = await venderProducto(productoSeleccionado.id, cantidad);
-
     if (!resultado.exito) {
       Alert.alert('Error', resultado.mensaje);
       return;
     }
-
     setModalVisible(false);
     Alert.alert(
-      'Venta registrada',
+      'Venta registrada ✅',
       `${cantidad}x ${productoSeleccionado.nombre}\nGanancia: Bs ${resultado.venta.ganancia}`
     );
     cargarDatos();
   }
 
-  function renderProducto({ item }) {
-    return (
-      <TouchableOpacity style={styles.tarjeta} onPress={() => abrirModal(item)}>
-        <View style={styles.tarjetaFila}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.nombreProducto}>{item.nombre}</Text>
-            <Text style={styles.precioTexto}>Bs {item.precioVenta} c/u</Text>
-          </View>
-          <View style={styles.stockBadge}>
-            <Text style={styles.stockTexto}>{item.cantidad} en stock</Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    );
-  }
-
-  function renderVenta({ item }) {
-    const fecha = new Date(item.fecha);
-    const hora = fecha.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    return (
-      <View style={styles.ventaFila}>
-        <View style={{ flex: 1 }}>
-          <Text style={styles.ventaNombre}>{item.nombreProducto}</Text>
-          <Text style={styles.ventaHora}>{hora} · {item.cantidad} unidad{item.cantidad > 1 ? 'es' : ''}</Text>
-        </View>
-        <Text style={styles.ventaGanancia}>+Bs {item.ganancia}</Text>
-      </View>
+  // Borrar una venta — pide confirmación, luego la elimina y recalcula todo
+  async function borrarVenta(venta) {
+    Alert.alert(
+      'Borrar venta',
+      `¿Eliminar venta de ${venta.cantidad}x ${venta.nombreProducto}?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        {
+          text: 'Eliminar',
+          style: 'destructive',
+          onPress: async () => {
+            await eliminarVenta(venta.id);
+            cargarDatos(); // recarga todo — resumen se actualiza solo
+          },
+        },
+      ]
     );
   }
 
   if (cargando) return <ActivityIndicator color={COLORS.acento} style={{ marginTop: 40 }} />;
 
   return (
-    <ScrollView style={styles.fondo} showsVerticalScrollIndicator={false}>
-      <View style={styles.contenedor}>
+    <GestureHandlerRootView style={{ flex: 1 }}>
+      <ScrollView style={styles.fondo} showsVerticalScrollIndicator={false}>
+        <View style={styles.contenedor}>
 
-        {/* Resumen del día */}
-        <View style={styles.filaTarjetas}>
-          <View style={styles.tarjetaResumen}>
-            <Text style={styles.resumenLabel}>Ventas hoy</Text>
-            <Text style={styles.resumenNumero}>{resumen.cantidadHoy}</Text>
-          </View>
-          <View style={styles.tarjetaResumen}>
-            <Text style={styles.resumenLabel}>Ganancia hoy</Text>
-            <Text style={[styles.resumenNumero, { color: COLORS.exito }]}>
-              Bs {resumen.gananciaHoy}
-            </Text>
-          </View>
-          <View style={styles.tarjetaResumen}>
-            <Text style={styles.resumenLabel}>Este mes</Text>
-            <Text style={[styles.resumenNumero, { color: COLORS.acento }]}>
-              Bs {resumen.gananciaMes}
-            </Text>
-          </View>
-        </View>
-
-        {/* Productos disponibles */}
-        <Text style={styles.seccionTitulo}>Registrar venta</Text>
-        {productos.length === 0 ? (
-          <Text style={styles.textoVacio}>Agrega productos desde Inventario primero</Text>
-        ) : (
-          productos.map(item => (
-            <TouchableOpacity key={item.id} style={styles.tarjeta} onPress={() => abrirModal(item)}>
-              <View style={styles.tarjetaFila}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.nombreProducto}>{item.nombre}</Text>
-                  <Text style={styles.precioTexto}>Bs {item.precioVenta} c/u</Text>
-                </View>
-                <View style={styles.stockBadge}>
-                  <Text style={styles.stockTexto}>{item.cantidad} en stock</Text>
-                </View>
-              </View>
-            </TouchableOpacity>
-          ))
-        )}
-
-        {/* Historial de hoy */}
-        {ventasHoy.length > 0 && (
-          <>
-            <Text style={styles.seccionTitulo}>Ventas de hoy</Text>
-            {ventasHoy.map(item => (
-              <View key={item.id} style={styles.ventaFila}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.ventaNombre}>{item.nombreProducto}</Text>
-                  <Text style={styles.ventaHora}>
-                    {new Date(item.fecha).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    · {item.cantidad} unidad{item.cantidad > 1 ? 'es' : ''}
-                  </Text>
-                </View>
-                <Text style={styles.ventaGanancia}>+Bs {item.ganancia}</Text>
-              </View>
-            ))}
-          </>
-        )}
-
-      </View>
-
-      {/* Modal cantidad */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
-        <View style={styles.modal}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitulo}>Registrar venta</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
-              <Ionicons name="close" size={24} color={COLORS.textoGris} />
-            </TouchableOpacity>
-          </View>
-
-          {productoSeleccionado && (
-            <>
-              <Text style={styles.modalProducto}>{productoSeleccionado.nombre}</Text>
-              <Text style={styles.modalPrecio}>Bs {productoSeleccionado.precioVenta} c/u</Text>
-
-              {/* Selector de cantidad */}
-              <Text style={styles.campoLabel}>Cantidad</Text>
-              <View style={styles.selectorCantidad}>
-                <TouchableOpacity
-                  style={styles.btnCantidad}
-                  onPress={() => setCantidad(c => Math.max(1, c - 1))}
-                >
-                  <Ionicons name="remove" size={24} color={COLORS.textoBlanco} />
-                </TouchableOpacity>
-                <Text style={styles.cantidadNumero}>{cantidad}</Text>
-                <TouchableOpacity
-                  style={styles.btnCantidad}
-                  onPress={() => setCantidad(c => Math.min(productoSeleccionado.cantidad, c + 1))}
-                >
-                  <Ionicons name="add" size={24} color={COLORS.textoBlanco} />
-                </TouchableOpacity>
-              </View>
-
-              <Text style={styles.totalTexto}>
-                Total: Bs {productoSeleccionado.precioVenta * cantidad}
+          {/* Resumen del día */}
+          <View style={styles.filaTarjetas}>
+            <View style={styles.tarjetaResumen}>
+              <Text style={styles.resumenLabel}>Ventas hoy</Text>
+              <Text style={styles.resumenNumero}>{resumen.cantidadHoy}</Text>
+            </View>
+            <View style={styles.tarjetaResumen}>
+              <Text style={styles.resumenLabel}>Ganancia hoy</Text>
+              <Text style={[styles.resumenNumero, { color: COLORS.exito }]}>
+                Bs {resumen.gananciaHoy}
               </Text>
+            </View>
+            <View style={styles.tarjetaResumen}>
+              <Text style={styles.resumenLabel}>Este mes</Text>
+              <Text style={[styles.resumenNumero, { color: COLORS.acento }]}>
+                Bs {resumen.gananciaMes}
+              </Text>
+            </View>
+          </View>
 
-              <TouchableOpacity style={styles.botonVender} onPress={confirmarVenta}>
-                <Text style={styles.botonVenderTexto}>Confirmar venta</Text>
+          {/* Productos para registrar venta */}
+          <Text style={styles.seccionTitulo}>Registrar venta</Text>
+          {productos.length === 0 ? (
+            <Text style={styles.textoVacio}>Agrega productos desde Inventario primero</Text>
+          ) : (
+            productos.map(item => (
+              <TouchableOpacity key={item.id} style={styles.tarjeta} onPress={() => abrirModal(item)}>
+                <View style={styles.tarjetaFila}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.nombreProducto}>{item.nombre}</Text>
+                    <Text style={styles.precioTexto}>Bs {item.precioVenta} c/u</Text>
+                  </View>
+                  <View style={styles.stockBadge}>
+                    <Text style={styles.stockTexto}>{item.cantidad} en stock</Text>
+                  </View>
+                </View>
               </TouchableOpacity>
+            ))
+          )}
+
+          {/* Historial de hoy con swipe para borrar */}
+          {ventasHoy.length > 0 && (
+            <>
+              <Text style={styles.seccionTitulo}>Ventas de hoy</Text>
+              <Text style={styles.textoAyuda}>← Deslizá para borrar una venta</Text>
+              <View style={styles.listaVentas}>
+                {ventasHoy.map(item => (
+                  <FilaVenta
+                    key={item.id}
+                    item={item}
+                    onEliminar={borrarVenta}
+                  />
+                ))}
+              </View>
             </>
           )}
-        </View>
-      </Modal>
 
-    </ScrollView>
+        </View>
+
+        {/* Modal cantidad */}
+        <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+          <View style={styles.modal}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitulo}>Registrar venta</Text>
+              <TouchableOpacity onPress={() => setModalVisible(false)}>
+                <Ionicons name="close" size={24} color={COLORS.textoGris} />
+              </TouchableOpacity>
+            </View>
+
+            {productoSeleccionado && (
+              <>
+                <Text style={styles.modalProducto}>{productoSeleccionado.nombre}</Text>
+                <Text style={styles.modalPrecio}>Bs {productoSeleccionado.precioVenta} c/u</Text>
+
+                <Text style={styles.campoLabel}>Cantidad</Text>
+                <View style={styles.selectorCantidad}>
+                  <TouchableOpacity
+                    style={styles.btnCantidad}
+                    onPress={() => setCantidad(c => Math.max(1, c - 1))}
+                  >
+                    <Ionicons name="remove" size={24} color={COLORS.textoBlanco} />
+                  </TouchableOpacity>
+                  <Text style={styles.cantidadNumero}>{cantidad}</Text>
+                  <TouchableOpacity
+                    style={styles.btnCantidad}
+                    onPress={() => setCantidad(c => Math.min(productoSeleccionado.cantidad, c + 1))}
+                  >
+                    <Ionicons name="add" size={24} color={COLORS.textoBlanco} />
+                  </TouchableOpacity>
+                </View>
+
+                <Text style={styles.totalTexto}>
+                  Total: Bs {productoSeleccionado.precioVenta * cantidad}
+                </Text>
+
+                <TouchableOpacity style={styles.botonVender} onPress={confirmarVenta}>
+                  <Text style={styles.botonVenderTexto}>Confirmar venta</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </Modal>
+
+      </ScrollView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -222,22 +299,21 @@ const styles = StyleSheet.create({
   fondo: { flex: 1, backgroundColor: COLORS.fondo },
   contenedor: { padding: 16, paddingBottom: 40 },
 
-  // Resumen
   filaTarjetas: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 24 },
   tarjetaResumen: {
-    backgroundColor: COLORS.tarjeta,
-    borderRadius: 14,
-    padding: 14,
-    width: '31%',
-    alignItems: 'center',
+    backgroundColor: COLORS.tarjeta, borderRadius: 14,
+    padding: 14, width: '31%', alignItems: 'center',
   },
   resumenLabel: { fontSize: 11, color: COLORS.textoGris, marginBottom: 6 },
   resumenNumero: { fontSize: 18, fontWeight: '700', color: COLORS.textoBlanco },
 
-  // Productos
   seccionTitulo: {
     fontSize: 18, fontWeight: '600', color: COLORS.textoBlanco,
-    marginBottom: 12, marginTop: 8, letterSpacing: -0.3,
+    marginBottom: 8, marginTop: 8, letterSpacing: -0.3,
+  },
+  textoAyuda: {
+    fontSize: 11, color: COLORS.textoGris,
+    marginBottom: 8, fontStyle: 'italic',
   },
   tarjeta: {
     backgroundColor: COLORS.tarjeta, borderRadius: 14,
@@ -253,16 +329,13 @@ const styles = StyleSheet.create({
   stockTexto: { fontSize: 12, color: COLORS.textoGris },
   textoVacio: { color: COLORS.textoGris, fontSize: 14, marginTop: 8 },
 
-  // Historial
-  ventaFila: {
-    flexDirection: 'row', alignItems: 'center',
-    paddingVertical: 12, borderBottomWidth: 0.5, borderBottomColor: COLORS.borde,
+  // Contenedor de ventas con fondo para que el swipe quede limpio
+  listaVentas: {
+    backgroundColor: COLORS.fondo,
+    borderRadius: 14,
+    overflow: 'hidden',
   },
-  ventaNombre: { fontSize: 15, fontWeight: '500', color: COLORS.textoBlanco },
-  ventaHora: { fontSize: 12, color: COLORS.textoGris, marginTop: 2 },
-  ventaGanancia: { fontSize: 16, fontWeight: '600', color: COLORS.exito },
 
-  // Modal
   modal: { flex: 1, backgroundColor: COLORS.fondo, padding: 24 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between',

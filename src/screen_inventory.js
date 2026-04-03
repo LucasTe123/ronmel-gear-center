@@ -1,6 +1,6 @@
 // ============================================
 // SCREEN_INVENTORY.JS
-// Tarjeta delgada + swipe borrar estilo iPhone
+// Tarjeta delgada + swipe borrar + visor imagen con zoom
 // ============================================
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -8,17 +8,175 @@ import {
   View, Text, StyleSheet, FlatList,
   TouchableOpacity, Modal, TextInput,
   Alert, ScrollView, ActivityIndicator,
-  Image, Linking, Animated,
+  Image, Linking, Animated, Dimensions,
 } from 'react-native';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
+import {
+  GestureHandlerRootView,
+  Swipeable,
+  PinchGestureHandler,
+  PanGestureHandler,
+  State,
+} from 'react-native-gesture-handler';
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from './colors_config';
 import { getProductos, agregarNuevoProducto, eliminarProducto, calcularGanancia } from './logic_inventory';
 import { seleccionarDeGaleria, tomarFoto } from './image_manager';
+import { getVentas } from './storage_manager';
+
+const { width: ANCHO, height: ALTO } = Dimensions.get('window');
 
 // ============================================
-// COMPONENTE: Tarjeta delgada con swipe
+// VISOR DE IMAGEN CON ZOOM Y ARRASTRE
+// Pellizca para zoom hasta 4x
+// Arrastra para mover
+// Doble tap para resetear
+// ============================================
+function VisorImagen({ uri, visible, onCerrar }) {
+  const escala = useRef(new Animated.Value(1)).current;
+  const escalaBase = useRef(1);
+  const traduccionX = useRef(new Animated.Value(0)).current;
+  const traduccionY = useRef(new Animated.Value(0)).current;
+  const posicionBase = useRef({ x: 0, y: 0 });
+  const ultimoTap = useRef(0);
+
+  function cerrar() {
+    escala.setValue(1);
+    escalaBase.current = 1;
+    traduccionX.setValue(0);
+    traduccionY.setValue(0);
+    posicionBase.current = { x: 0, y: 0 };
+    onCerrar();
+  }
+
+  function manejarTap() {
+    const ahora = Date.now();
+    if (ahora - ultimoTap.current < 300) {
+      // Doble tap: resetea zoom y posición
+      Animated.spring(escala, { toValue: 1, useNativeDriver: true }).start();
+      Animated.spring(traduccionX, { toValue: 0, useNativeDriver: true }).start();
+      Animated.spring(traduccionY, { toValue: 0, useNativeDriver: true }).start();
+      escalaBase.current = 1;
+      posicionBase.current = { x: 0, y: 0 };
+    }
+    ultimoTap.current = ahora;
+  }
+
+  const manejarPellizco = Animated.event(
+    [{ nativeEvent: { scale: escala } }],
+    { useNativeDriver: true }
+  );
+
+  function alSoltarPellizco(event) {
+    if (event.nativeEvent.state === State.END) {
+      const nuevaEscala = escalaBase.current * event.nativeEvent.scale;
+      const escalaFinal = Math.min(Math.max(nuevaEscala, 1), 4);
+      escalaBase.current = escalaFinal;
+      escala.setValue(escalaFinal);
+    }
+  }
+
+  const manejarArrastre = Animated.event(
+    [{ nativeEvent: { translationX: traduccionX, translationY: traduccionY } }],
+    { useNativeDriver: true }
+  );
+
+  function alSoltarArrastre(event) {
+    if (event.nativeEvent.state === State.END) {
+      posicionBase.current = {
+        x: posicionBase.current.x + event.nativeEvent.translationX,
+        y: posicionBase.current.y + event.nativeEvent.translationY,
+      };
+      traduccionX.setValue(posicionBase.current.x);
+      traduccionY.setValue(posicionBase.current.y);
+    }
+  }
+
+  if (!uri) return null;
+
+  return (
+    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
+      <View style={visorEstilos.fondo}>
+
+        {/* Botón cerrar */}
+        <TouchableOpacity style={visorEstilos.botonCerrar} onPress={cerrar}>
+          <Ionicons name="close" size={26} color="#fff" />
+        </TouchableOpacity>
+
+        {/* Texto ayuda abajo */}
+        <Text style={visorEstilos.ayuda}>Pellizca · Arrastra · Doble tap para resetear</Text>
+
+        {/* Imagen con zoom y arrastre */}
+        <PanGestureHandler
+          onGestureEvent={manejarArrastre}
+          onHandlerStateChange={alSoltarArrastre}
+        >
+          <Animated.View>
+            <PinchGestureHandler
+              onGestureEvent={manejarPellizco}
+              onHandlerStateChange={alSoltarPellizco}
+            >
+              <Animated.Image
+                source={{ uri }}
+                style={[
+                  visorEstilos.imagen,
+                  {
+                    transform: [
+                      { scale: escala },
+                      { translateX: traduccionX },
+                      { translateY: traduccionY },
+                    ],
+                  },
+                ]}
+                resizeMode="contain"
+              />
+            </PinchGestureHandler>
+          </Animated.View>
+        </PanGestureHandler>
+
+        {/* Zona invisible para detectar doble tap */}
+        <TouchableOpacity
+          style={visorEstilos.zonaTap}
+          onPress={manejarTap}
+          activeOpacity={1}
+        />
+
+      </View>
+    </Modal>
+  );
+}
+
+const visorEstilos = StyleSheet.create({
+  fondo: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.97)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  botonCerrar: {
+    position: 'absolute', top: 56, right: 20, zIndex: 10,
+    backgroundColor: 'rgba(255,255,255,0.15)',
+    borderRadius: 20, padding: 8,
+  },
+  ayuda: {
+    position: 'absolute', bottom: 48,
+    color: 'rgba(255,255,255,0.35)',
+    fontSize: 12, zIndex: 10,
+  },
+  imagen: {
+    width: ANCHO,
+    height: ALTO * 0.75,
+  },
+  zonaTap: {
+    position: 'absolute',
+    width: ANCHO,
+    height: ALTO * 0.75,
+    zIndex: 1,
+  },
+});
+
+// ============================================
+// TARJETA CON SWIPE PARA BORRAR
 // ============================================
 function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
   const swipeableRef = useRef(null);
@@ -72,18 +230,12 @@ function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
       rightThreshold={50}
       overshootLeft={false}
       leftThreshold={99999}
-      onSwipeableOpen={(direction) => {
-        if (direction === 'right') {
-          onEliminar(item.id, item.nombre);
-        }
-      }}
     >
       <TouchableOpacity
         onPress={() => onVerDetalle(item)}
         activeOpacity={0.85}
         style={styles.tarjeta}
       >
-        {/* Foto cuadrada a la izquierda */}
         {item.imagenes && item.imagenes.length > 0 ? (
           <Image
             source={{ uri: item.imagenes[0] }}
@@ -96,7 +248,6 @@ function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
           </View>
         )}
 
-        {/* Nombre y stock */}
         <View style={styles.tarjetaInfo}>
           <Text style={styles.nombreProducto} numberOfLines={2}>{item.nombre}</Text>
           <Text style={[
@@ -107,7 +258,6 @@ function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
           </Text>
         </View>
 
-        {/* Flecha */}
         <Ionicons name="chevron-forward" size={18} color={COLORS.textoGris} />
       </TouchableOpacity>
     </Swipeable>
@@ -123,7 +273,13 @@ export default function InventarioScreen() {
   const [modalAgregar, setModalAgregar] = useState(false);
   const [modalDetalle, setModalDetalle] = useState(false);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
+  const [ventasProducto, setVentasProducto] = useState([]);
   const [imagenes, setImagenes] = useState([]);
+
+  // Estado visor imagen
+  const [imagenVisor, setImagenVisor] = useState(null);
+  const [visorVisible, setVisorVisible] = useState(false);
+
   const [form, setForm] = useState({
     nombre: '', precioCompra: '', precioVenta: '',
     cantidad: '', linkProveedor: '',
@@ -138,6 +294,16 @@ export default function InventarioScreen() {
     const data = await getProductos();
     setProductos(data);
     setCargando(false);
+  }
+
+  async function verDetalle(item) {
+    setProductoSeleccionado(item);
+    setModalDetalle(true);
+    const todasLasVentas = await getVentas();
+    const ventasDeEste = todasLasVentas.filter(
+      v => v.productoId === item.id || v.nombreProducto === item.nombre
+    );
+    setVentasProducto(ventasDeEste);
   }
 
   function abrirSelectorImagen() {
@@ -177,9 +343,12 @@ export default function InventarioScreen() {
     ]);
   }
 
-  function verDetalle(item) {
-    setProductoSeleccionado(item);
-    setModalDetalle(true);
+  function totalUnidades(ventas) {
+    return ventas.reduce((sum, v) => sum + (Number(v.cantidad) || 0), 0);
+  }
+
+  function totalRecaudado(ventas) {
+    return ventas.reduce((sum, v) => sum + (Number(v.total) || 0), 0).toFixed(0);
   }
 
   return (
@@ -212,7 +381,7 @@ export default function InventarioScreen() {
           />
         )}
 
-        {/* Botón flotante agregar */}
+        {/* Botón flotante */}
         <TouchableOpacity style={styles.botonFlotante} onPress={() => setModalAgregar(true)}>
           <Ionicons name="add" size={30} color="#fff" />
         </TouchableOpacity>
@@ -232,25 +401,46 @@ export default function InventarioScreen() {
 
               <ScrollView showsVerticalScrollIndicator={false}>
 
-                {/* Galería de imágenes */}
+                {/* Galería — toca para ver en grande con zoom */}
                 {productoSeleccionado.imagenes?.length > 0 && (
-                  <ScrollView
-                    horizontal
-                    showsHorizontalScrollIndicator={false}
-                    style={{ marginBottom: 20 }}
-                  >
-                    {productoSeleccionado.imagenes.map((uri, i) => (
-                      <Image
-                        key={i}
-                        source={{ uri }}
-                        style={styles.imagenDetalle}
-                        resizeMode="cover"
-                      />
-                    ))}
-                  </ScrollView>
+                  <>
+                    <ScrollView
+                      horizontal
+                      showsHorizontalScrollIndicator={false}
+                      style={{ marginBottom: 20 }}
+                    >
+                      {productoSeleccionado.imagenes.map((uri, i) => (
+                        <TouchableOpacity
+                          key={i}
+                          onPress={() => {
+                            setImagenVisor(uri);
+                            setVisorVisible(true);
+                          }}
+                          activeOpacity={0.85}
+                        >
+                          <Image
+                            source={{ uri }}
+                            style={styles.imagenDetalle}
+                            resizeMode="cover"
+                          />
+                          {/* Ícono lupa en esquina */}
+                          <View style={styles.lupaOverlay}>
+                            <Ionicons name="expand-outline" size={14} color="#fff" />
+                          </View>
+                        </TouchableOpacity>
+                      ))}
+                    </ScrollView>
+
+                    {/* Visor pantalla completa */}
+                    <VisorImagen
+                      uri={imagenVisor}
+                      visible={visorVisible}
+                      onCerrar={() => setVisorVisible(false)}
+                    />
+                  </>
                 )}
 
-                {/* Datos: compra, venta, ganancia, stock */}
+                {/* Grid de datos */}
                 <View style={styles.datosGrid}>
                   <View style={styles.datoBloque}>
                     <Text style={styles.datoLabel}>Compra</Text>
@@ -261,13 +451,13 @@ export default function InventarioScreen() {
                     <Text style={styles.datoValor}>Bs {productoSeleccionado.precioVenta}</Text>
                   </View>
                   <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Ganancia potencial</Text>
+                    <Text style={styles.datoLabel}>Ganancia unit.</Text>
                     <Text style={[styles.datoValor, { color: COLORS.exito }]}>
                       Bs {calcularGanancia(productoSeleccionado.precioCompra, productoSeleccionado.precioVenta)}
                     </Text>
                   </View>
                   <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Stock</Text>
+                    <Text style={styles.datoLabel}>Stock actual</Text>
                     <Text style={[styles.datoValor, {
                       color: productoSeleccionado.cantidad <= 2 ? COLORS.advertencia : COLORS.textoBlanco
                     }]}>
@@ -276,10 +466,29 @@ export default function InventarioScreen() {
                   </View>
                 </View>
 
-                {/* Nota aclaratoria sobre ganancia */}
-                <Text style={styles.notaGanancia}>
-                  * La ganancia se calcula sobre el precio unitario. Las ventas reales se registran por separado.
-                </Text>
+                {/* Ventas — solo totales, sin lista detallada */}
+                <View style={styles.seccionVentas}>
+                  <Text style={styles.seccionTitulo}>📦 Ventas de este producto</Text>
+
+                  {ventasProducto.length === 0 ? (
+                    <Text style={styles.sinVentas}>Aún no hay ventas registradas</Text>
+                  ) : (
+                    <View style={styles.resumenVentas}>
+                      <View style={styles.resumenBloque}>
+                        <Text style={styles.datoLabel}>Unidades vendidas</Text>
+                        <Text style={[styles.datoValor, { color: COLORS.acento }]}>
+                          {totalUnidades(ventasProducto)}
+                        </Text>
+                      </View>
+                      <View style={styles.resumenBloque}>
+                        <Text style={styles.datoLabel}>Total recaudado</Text>
+                        <Text style={[styles.datoValor, { color: COLORS.exito }]}>
+                          Bs {totalRecaudado(ventasProducto)}
+                        </Text>
+                      </View>
+                    </View>
+                  )}
+                </View>
 
                 {/* Link proveedor */}
                 {productoSeleccionado.linkProveedor ? (
@@ -292,7 +501,7 @@ export default function InventarioScreen() {
                   </TouchableOpacity>
                 ) : null}
 
-                {/* Botón eliminar */}
+                {/* Eliminar */}
                 <TouchableOpacity
                   style={styles.botonEliminar}
                   onPress={() => eliminarItem(productoSeleccionado.id, productoSeleccionado.nombre)}
@@ -317,7 +526,6 @@ export default function InventarioScreen() {
             </View>
 
             <ScrollView showsVerticalScrollIndicator={false}>
-
               <Text style={styles.campoLabel}>Imágenes</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 {imagenes.map((uri, index) => (
@@ -360,7 +568,6 @@ export default function InventarioScreen() {
               <TouchableOpacity style={styles.botonGuardar} onPress={guardarProducto}>
                 <Text style={styles.botonGuardarTexto}>Guardar Producto</Text>
               </TouchableOpacity>
-
             </ScrollView>
           </View>
         </Modal>
@@ -376,59 +583,48 @@ export default function InventarioScreen() {
 const styles = StyleSheet.create({
   fondo: { flex: 1, backgroundColor: COLORS.fondo },
 
-  // Lista
   lista: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 },
-  separador: { height: 1, backgroundColor: COLORS.borde, marginLeft: 90 },
+  separador: { height: 8 },
 
-  // Tarjeta delgada
   tarjeta: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 10,
     paddingHorizontal: 12,
     backgroundColor: COLORS.tarjeta,
+    borderRadius: 14,
     gap: 12,
   },
-  fotoMiniatura: {
-    width: 56, height: 56, borderRadius: 10,
-  },
+  fotoMiniatura: { width: 56, height: 56, borderRadius: 10 },
   fotoPlaceholder: {
     width: 56, height: 56, borderRadius: 10,
     backgroundColor: COLORS.fondo,
     justifyContent: 'center', alignItems: 'center',
   },
   tarjetaInfo: { flex: 1 },
-  nombreProducto: {
-    fontSize: 15, fontWeight: '600',
-    color: COLORS.textoBlanco, marginBottom: 3,
-  },
+  nombreProducto: { fontSize: 15, fontWeight: '600', color: COLORS.textoBlanco, marginBottom: 3 },
   stockTexto: { fontSize: 13 },
 
-  // Swipe borrar
   contenedorBorrar: {
-    width: 80,
-    alignItems: 'flex-start',
+    width: 90,
+    alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'visible',
-    backgroundColor: COLORS.tarjeta,
+    backgroundColor: COLORS.fondo,
   },
   circuloBorrar: {
     width: 52, height: 52, borderRadius: 26,
     backgroundColor: '#FF3B30',
     alignItems: 'center', justifyContent: 'center',
-    marginLeft: 10,
   },
   botonInterior: {
     width: 52, height: 52, borderRadius: 26,
     alignItems: 'center', justifyContent: 'center',
   },
 
-  // Estado vacío
   vacio: { flex: 1, justifyContent: 'center', alignItems: 'center', marginTop: 100 },
   vacioTexto: { fontSize: 18, fontWeight: '600', color: COLORS.textoBlanco, marginTop: 16 },
   vacioSub: { fontSize: 14, color: COLORS.textoGris, marginTop: 6 },
 
-  // Botón flotante
   botonFlotante: {
     position: 'absolute', bottom: 24, right: 24,
     backgroundColor: COLORS.acento, width: 58, height: 58,
@@ -437,7 +633,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.4, shadowRadius: 8,
   },
 
-  // Modal compartido
   modal: { flex: 1, backgroundColor: COLORS.fondo, padding: 20 },
   modalHeader: {
     flexDirection: 'row', justifyContent: 'space-between',
@@ -445,23 +640,44 @@ const styles = StyleSheet.create({
   },
   modalTitulo: { fontSize: 20, fontWeight: '700', color: COLORS.textoBlanco, flex: 1, marginRight: 12 },
 
-  // Detalle
   imagenDetalle: { width: 220, height: 160, borderRadius: 12, marginRight: 10 },
+
+  // Ícono lupa encima de cada foto
+  lupaOverlay: {
+    position: 'absolute', bottom: 8, right: 18,
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    borderRadius: 8, padding: 4,
+  },
+
   datosGrid: {
     flexDirection: 'row', flexWrap: 'wrap',
     backgroundColor: COLORS.tarjeta, borderRadius: 14,
-    marginBottom: 8, padding: 4,
+    marginBottom: 16, padding: 4,
   },
-  datoBloque: {
-    width: '50%', alignItems: 'center', paddingVertical: 16,
-  },
+  datoBloque: { width: '50%', alignItems: 'center', paddingVertical: 16 },
   datoLabel: { fontSize: 12, color: COLORS.textoGris, marginBottom: 4 },
   datoValor: { fontSize: 18, fontWeight: '700', color: COLORS.textoBlanco },
-  notaGanancia: {
-    fontSize: 11, color: COLORS.textoGris,
-    marginBottom: 16, paddingHorizontal: 4,
-    fontStyle: 'italic',
+
+  // Sección ventas
+  seccionVentas: {
+    backgroundColor: COLORS.tarjeta,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
   },
+  seccionTitulo: {
+    fontSize: 15, fontWeight: '700',
+    color: COLORS.textoBlanco, marginBottom: 12,
+  },
+  sinVentas: {
+    fontSize: 13, color: COLORS.textoGris,
+    textAlign: 'center', paddingVertical: 12,
+  },
+  resumenVentas: {
+    flexDirection: 'row',
+  },
+  resumenBloque: { flex: 1, alignItems: 'center' },
+
   botonLink: {
     flexDirection: 'row', alignItems: 'center',
     backgroundColor: COLORS.tarjeta, borderRadius: 12,
@@ -475,7 +691,6 @@ const styles = StyleSheet.create({
   },
   botonEliminarTexto: { color: '#fff', fontSize: 16, fontWeight: '600' },
 
-  // Modal agregar
   imagenPreviewContainer: { position: 'relative', marginRight: 10 },
   imagenPreview: { width: 90, height: 90, borderRadius: 10 },
   eliminarImagen: { position: 'absolute', top: -6, right: -6 },

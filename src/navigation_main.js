@@ -1,15 +1,13 @@
 // ============================================
 // NAVIGATION_MAIN.JS - Navegación entre pantallas
-// Si quieres agregar más pantallas, hazlo AQUÍ
 // ============================================
 
 import React from 'react';
 import { NavigationContainer } from '@react-navigation/native';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
-import { Text } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import COLORS from './colors_config';
 
-// Importar pantallas
 import HomeScreen from './screen_home';
 import InventarioScreen from './screen_inventory';
 import VentasScreen from './screen_sales';
@@ -20,35 +18,37 @@ export default function Navegacion() {
   return (
     <NavigationContainer>
       <Tab.Navigator
-        screenOptions={{
-          // --- Cambia colores de la barra de navegación aquí ---
+        screenOptions={({ route }) => ({
+          // --- Icono según la pantalla ---
+          tabBarIcon: ({ focused, size }) => {
+            let iconName;
+            if (route.name === 'Inicio') iconName = focused ? 'home' : 'home-outline';
+            if (route.name === 'Inventario') iconName = focused ? 'cube' : 'cube-outline';
+            if (route.name === 'Ventas') iconName = focused ? 'bar-chart' : 'bar-chart-outline';
+            return <Ionicons name={iconName} size={size} color={focused ? COLORS.acento : COLORS.textoGris} />;
+          },
+
+          // --- Estilo de la barra inferior ---
           tabBarStyle: {
-            backgroundColor: COLORS.tarjeta,
-            borderTopColor: COLORS.secundario,
+            backgroundColor: '#1c1c1e',
+            borderTopColor: COLORS.borde,
+            borderTopWidth: 0.5,
             paddingBottom: 8,
             height: 60,
           },
           tabBarActiveTintColor: COLORS.acento,
           tabBarInactiveTintColor: COLORS.textoGris,
-          headerStyle: { backgroundColor: COLORS.tarjeta },
+
+          // --- Header de cada pantalla ---
+          headerStyle: { backgroundColor: '#1c1c1e' },
           headerTintColor: COLORS.textoBlanco,
-        }}
+          headerTitleStyle: { fontWeight: '600', fontSize: 17 },
+          headerShadowVisible: false,
+        })}
       >
-        <Tab.Screen
-          name="Inicio"
-          component={HomeScreen}
-          options={{ tabBarIcon: () => <Text style={{fontSize:20}}>🏠</Text> }}
-        />
-        <Tab.Screen
-          name="Inventario"
-          component={InventarioScreen}
-          options={{ tabBarIcon: () => <Text style={{fontSize:20}}>📦</Text> }}
-        />
-        <Tab.Screen
-          name="Ventas"
-          component={VentasScreen}
-          options={{ tabBarIcon: () => <Text style={{fontSize:20}}>💰</Text> }}
-        />
+        <Tab.Screen name="Inicio" component={HomeScreen} />
+        <Tab.Screen name="Inventario" component={InventarioScreen} />
+        <Tab.Screen name="Ventas" component={VentasScreen} />
       </Tab.Navigator>
     </NavigationContainer>
   );

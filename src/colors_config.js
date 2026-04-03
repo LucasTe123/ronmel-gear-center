@@ -4,26 +4,24 @@
 // ============================================
 
 const COLORS = {
-  // Color de fondo principal
-  fondo: '#1a1a2e',
+  // Fondos (estilo iOS oscuro)
+  fondo: '#000000',
+  tarjeta: '#1c1c1e',
+  secundario: '#2c2c2e',
+  borde: '#3a3a3c',
 
-  // Color de las tarjetas/cajas
-  tarjeta: '#16213e',
-
-  // Color secundario (cajas internas)
-  secundario: '#0f3460',
-
-  // Color principal de botones y acentos
-  acento: '#e94560',
+  // Acento principal - azul iOS
+  acento: '#0a84ff',
 
   // Textos
   textoBlanco: '#ffffff',
-  textoGris: '#a0a0a0',
+  textoGris: '#8e8e93',
+  textoClaro: '#ebebf5',
 
-  // Colores de estado
-  exito: '#4caf50',    // verde - para ganancias
-  advertencia: '#ff9800', // naranja - para stock bajo
-  error: '#f44336',    // rojo - para errores
+  // Estados
+  exito: '#30d158',
+  advertencia: '#ff9f0a',
+  error: '#ff453a',
 };
 
 export default COLORS;

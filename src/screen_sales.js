@@ -1,9 +1,7 @@
 // ============================================
 // SCREEN_SALES.JS - Pantalla de ventas
-// Solo muestra historial + resumen
-// (El formulario de registrar venta se movió al Home)
 // ============================================
-
+import NumeroRuleta from './NumeroRuleta';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, TouchableOpacity,
@@ -16,10 +14,6 @@ import COLORS from './colors_config';
 import { getVentasHoy, getResumenVentas } from './logic_sales';
 import { eliminarVenta } from './storage_manager';
 
-// ============================================
-// FILA DE VENTA CON SWIPE PARA BORRAR
-// (sin cambios)
-// ============================================
 function FilaVenta({ item, onEliminar }) {
   const swipeableRef = useRef(null);
 
@@ -88,10 +82,8 @@ const estilosVenta = StyleSheet.create({
   hora: { fontSize: 12, color: COLORS.textoGris, marginTop: 2 },
   ganancia: { fontSize: 16, fontWeight: '600', color: COLORS.exito },
   contenedorBorrar: {
-    width: 80,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: COLORS.fondo,
+    width: 80, alignItems: 'center',
+    justifyContent: 'center', backgroundColor: COLORS.fondo,
   },
   circuloBorrar: {
     width: 46, height: 46, borderRadius: 23,
@@ -104,9 +96,6 @@ const estilosVenta = StyleSheet.create({
   },
 });
 
-// ============================================
-// PANTALLA PRINCIPAL DE VENTAS
-// ============================================
 export default function VentasScreen() {
   const [ventasHoy, setVentasHoy] = useState([]);
   const [resumen, setResumen] = useState({ cantidadHoy: 0, gananciaHoy: 0, gananciaMes: 0 });
@@ -116,15 +105,20 @@ export default function VentasScreen() {
     useCallback(() => { cargarDatos(); }, [])
   );
 
+  // ✅ try/catch/finally — setCargando(false) SIEMPRE corre
   async function cargarDatos() {
-    setCargando(true);
-    const [ventas, res] = await Promise.all([
-      getVentasHoy(),
-      getResumenVentas(),
-    ]);
-    setVentasHoy(ventas);
-    setResumen(res);
-    setCargando(false);
+    try {
+      const [ventas, res] = await Promise.all([
+        getVentasHoy(),
+        getResumenVentas(),
+      ]);
+      setVentasHoy(ventas);
+      setResumen(res);
+    } catch (error) {
+      console.log('Error cargando ventas:', error);
+    } finally {
+      setCargando(false); // ← siempre se ejecuta pase lo que pase
+    }
   }
 
   async function borrarVenta(venta) {
@@ -156,23 +150,30 @@ export default function VentasScreen() {
           <View style={styles.filaTarjetas}>
             <View style={styles.tarjetaResumen}>
               <Text style={styles.resumenLabel}>Ventas hoy</Text>
-              <Text style={styles.resumenNumero}>{resumen.cantidadHoy}</Text>
+              <NumeroRuleta
+                valor={resumen.cantidadHoy}
+                style={styles.resumenNumero}
+              />
             </View>
             <View style={styles.tarjetaResumen}>
               <Text style={styles.resumenLabel}>Ganancia hoy</Text>
-              <Text style={[styles.resumenNumero, { color: COLORS.exito }]}>
-                Bs {resumen.gananciaHoy}
-              </Text>
+              <NumeroRuleta
+                valor={resumen.gananciaHoy}
+                prefix="Bs "
+                style={[styles.resumenNumero, { color: COLORS.exito }]}
+              />
             </View>
             <View style={styles.tarjetaResumen}>
               <Text style={styles.resumenLabel}>Este mes</Text>
-              <Text style={[styles.resumenNumero, { color: COLORS.acento }]}>
-                Bs {resumen.gananciaMes}
-              </Text>
+              <NumeroRuleta
+                valor={resumen.gananciaMes}
+                prefix="Bs "
+                style={[styles.resumenNumero, { color: COLORS.acento }]}
+              />
             </View>
           </View>
 
-          {/* Historial con swipe para borrar */}
+          {/* Historial */}
           {ventasHoy.length > 0 ? (
             <>
               <Text style={styles.seccionTitulo}>Ventas de hoy</Text>
@@ -217,8 +218,7 @@ const styles = StyleSheet.create({
   },
   listaVentas: {
     backgroundColor: COLORS.fondo,
-    borderRadius: 14,
-    overflow: 'hidden',
+    borderRadius: 14, overflow: 'hidden',
   },
   textoVacio: { color: COLORS.textoGris, fontSize: 14, marginTop: 8 },
 });

@@ -1,6 +1,8 @@
 // ============================================
-// SCREEN_INVENTORY.JS
-// Tarjeta delgada + swipe borrar + visor imagen con zoom
+// SCREEN_INVENTORY.JS — CORREGIDO
+// - Input de stock inline (sin modal anidado)
+// - KeyboardAvoidingView para que no tape el teclado
+// - Scroll automático al input cuando se abre
 // ============================================
 
 import React, { useState, useCallback, useRef } from 'react';
@@ -9,6 +11,7 @@ import {
   TouchableOpacity, Modal, TextInput,
   Alert, ScrollView, ActivityIndicator,
   Image, Linking, Animated, Dimensions,
+  KeyboardAvoidingView, Platform, Keyboard,
 } from 'react-native';
 import {
   GestureHandlerRootView,
@@ -20,7 +23,7 @@ import {
 import { useFocusEffect } from '@react-navigation/native';
 import { Ionicons } from '@expo/vector-icons';
 import COLORS from './colors_config';
-import { getProductos, agregarNuevoProducto, eliminarProducto, calcularGanancia } from './logic_inventory';
+import { getProductos, agregarNuevoProducto, eliminarProducto, calcularGanancia, sumarStockProducto } from './logic_inventory';
 import { seleccionarDeGaleria, tomarFoto } from './image_manager';
 import { getVentas } from './storage_manager';
 
@@ -28,9 +31,6 @@ const { width: ANCHO, height: ALTO } = Dimensions.get('window');
 
 // ============================================
 // VISOR DE IMAGEN CON ZOOM Y ARRASTRE
-// Pellizca para zoom hasta 4x
-// Arrastra para mover
-// Doble tap para resetear
 // ============================================
 function VisorImagen({ uri, visible, onCerrar }) {
   const escala = useRef(new Animated.Value(1)).current;
@@ -52,7 +52,6 @@ function VisorImagen({ uri, visible, onCerrar }) {
   function manejarTap() {
     const ahora = Date.now();
     if (ahora - ultimoTap.current < 300) {
-      // Doble tap: resetea zoom y posición
       Animated.spring(escala, { toValue: 1, useNativeDriver: true }).start();
       Animated.spring(traduccionX, { toValue: 0, useNativeDriver: true }).start();
       Animated.spring(traduccionY, { toValue: 0, useNativeDriver: true }).start();
@@ -97,16 +96,10 @@ function VisorImagen({ uri, visible, onCerrar }) {
   return (
     <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
       <View style={visorEstilos.fondo}>
-
-        {/* Botón cerrar */}
         <TouchableOpacity style={visorEstilos.botonCerrar} onPress={cerrar}>
           <Ionicons name="close" size={26} color="#fff" />
         </TouchableOpacity>
-
-        {/* Texto ayuda abajo */}
         <Text style={visorEstilos.ayuda}>Pellizca · Arrastra · Doble tap para resetear</Text>
-
-        {/* Imagen con zoom y arrastre */}
         <PanGestureHandler
           onGestureEvent={manejarArrastre}
           onHandlerStateChange={alSoltarArrastre}
@@ -133,14 +126,11 @@ function VisorImagen({ uri, visible, onCerrar }) {
             </PinchGestureHandler>
           </Animated.View>
         </PanGestureHandler>
-
-        {/* Zona invisible para detectar doble tap */}
         <TouchableOpacity
           style={visorEstilos.zonaTap}
           onPress={manejarTap}
           activeOpacity={1}
         />
-
       </View>
     </Modal>
   );
@@ -163,10 +153,7 @@ const visorEstilos = StyleSheet.create({
     color: 'rgba(255,255,255,0.35)',
     fontSize: 12, zIndex: 10,
   },
-  imagen: {
-    width: ANCHO,
-    height: ALTO * 0.75,
-  },
+  imagen: { width: ANCHO, height: ALTO * 0.75 },
   zonaTap: {
     position: 'absolute',
     width: ANCHO,
@@ -247,7 +234,6 @@ function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
             <Ionicons name="cube-outline" size={26} color={COLORS.textoGris} />
           </View>
         )}
-
         <View style={styles.tarjetaInfo}>
           <Text style={styles.nombreProducto} numberOfLines={2}>{item.nombre}</Text>
           <Text style={[
@@ -257,7 +243,6 @@ function TarjetaProducto({ item, onEliminar, onVerDetalle }) {
             Stock: {item.cantidad}
           </Text>
         </View>
-
         <Ionicons name="chevron-forward" size={18} color={COLORS.textoGris} />
       </TouchableOpacity>
     </Swipeable>
@@ -280,6 +265,15 @@ export default function InventarioScreen() {
   const [imagenVisor, setImagenVisor] = useState(null);
   const [visorVisible, setVisorVisible] = useState(false);
 
+  // ============================================
+  // ESTADO PARA AÑADIR STOCK — AHORA ES INLINE
+  // No hay modal separado, se expande dentro del detalle
+  // ============================================
+  const [stockPanelVisible, setStockPanelVisible] = useState(false);
+  const [cantidadAAnadir, setCantidadAAnadir] = useState('');
+  const inputStockRef = useRef(null);
+  const scrollDetalleRef = useRef(null);
+
   const [form, setForm] = useState({
     nombre: '', precioCompra: '', precioVenta: '',
     cantidad: '', linkProveedor: '',
@@ -297,6 +291,9 @@ export default function InventarioScreen() {
   }
 
   async function verDetalle(item) {
+    // Resetea el panel de stock al abrir un nuevo detalle
+    setStockPanelVisible(false);
+    setCantidadAAnadir('');
     setProductoSeleccionado(item);
     setModalDetalle(true);
     const todasLasVentas = await getVentas();
@@ -322,46 +319,106 @@ export default function InventarioScreen() {
 
   async function guardarProducto() {
     if (!form.nombre || !form.precioCompra || !form.precioVenta || !form.cantidad) {
-      Alert.alert('Campos incompletos', 'Completa nombre, precios y cantidad.');
+      Alert.alert('Error', 'Completa los campos obligatorios');
       return;
     }
     await agregarNuevoProducto({ ...form, imagenes });
-    setModalAgregar(false);
     setForm({ nombre: '', precioCompra: '', precioVenta: '', cantidad: '', linkProveedor: '' });
     setImagenes([]);
+    setModalAgregar(false);
     cargarProductos();
   }
 
-  async function eliminarItem(id, nombre) {
-    Alert.alert('Eliminar', `¿Eliminar "${nombre}"?`, [
-      { text: 'Cancelar', style: 'cancel' },
-      { text: 'Eliminar', style: 'destructive', onPress: async () => {
-        await eliminarProducto(id);
-        setModalDetalle(false);
-        cargarProductos();
-      }},
-    ]);
+  async function confirmarEliminar(id, nombre) {
+    Alert.alert(
+      'Eliminar producto',
+      `¿Eliminar "${nombre}"?`,
+      [
+        { text: 'Cancelar', style: 'cancel' },
+        { text: 'Eliminar', style: 'destructive', onPress: async () => {
+          await eliminarProducto(id);
+          setModalDetalle(false);
+          cargarProductos();
+        }},
+      ]
+    );
   }
 
-  function totalUnidades(ventas) {
-    return ventas.reduce((sum, v) => sum + (Number(v.cantidad) || 0), 0);
+  // ============================================
+  // ABRIR PANEL DE STOCK INLINE
+  // Muestra el input dentro del ScrollView del detalle
+  // ============================================
+  function abrirPanelStock() {
+    setStockPanelVisible(true);
+    setCantidadAAnadir('');
+    // Pequeño delay para que el panel se renderice antes de hacer focus
+    setTimeout(() => {
+      inputStockRef.current?.focus();
+      // Scroll hacia abajo para que el input quede visible sobre el teclado
+      scrollDetalleRef.current?.scrollToEnd({ animated: true });
+    }, 150);
   }
 
-  function totalRecaudado(ventas) {
-    return ventas.reduce((sum, v) => sum + (Number(v.total) || 0), 0).toFixed(0);
+  function cerrarPanelStock() {
+    Keyboard.dismiss();
+    setStockPanelVisible(false);
+    setCantidadAAnadir('');
+  }
+
+  // ============================================
+  // FUNCIÓN AÑADIR STOCK
+  // ============================================
+  async function handleAnadirStock() {
+    const cantidad = parseInt(cantidadAAnadir);
+
+    if (isNaN(cantidad) || cantidad <= 0) {
+      Alert.alert('Error', 'Ingresa una cantidad válida mayor a 0');
+      return;
+    }
+
+    Keyboard.dismiss();
+
+    await sumarStockProducto(productoSeleccionado.id, cantidad);
+
+    const productoActualizado = {
+      ...productoSeleccionado,
+      cantidad: productoSeleccionado.cantidad + cantidad,
+    };
+    setProductoSeleccionado(productoActualizado);
+
+    cargarProductos();
+
+    setStockPanelVisible(false);
+    setCantidadAAnadir('');
+
+    Alert.alert('✅ Listo', `Se añadieron ${cantidad} unidades al stock`);
+  }
+
+  if (cargando) {
+    return (
+      <View style={[styles.fondo, { justifyContent: 'center', alignItems: 'center' }]}>
+        <ActivityIndicator size="large" color={COLORS.acento} />
+      </View>
+    );
   }
 
   return (
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.fondo}>
 
-        {cargando ? (
-          <ActivityIndicator color={COLORS.acento} style={{ marginTop: 40 }} />
-        ) : productos.length === 0 ? (
+        {/* Visor de imagen a pantalla completa */}
+        <VisorImagen
+          uri={imagenVisor}
+          visible={visorVisible}
+          onCerrar={() => { setVisorVisible(false); setImagenVisor(null); }}
+        />
+
+        {/* Lista de productos o estado vacío */}
+        {productos.length === 0 ? (
           <View style={styles.vacio}>
-            <Ionicons name="cube-outline" size={60} color={COLORS.textoGris} />
+            <Ionicons name="cube-outline" size={56} color={COLORS.textoGris} />
             <Text style={styles.vacioTexto}>Sin productos aún</Text>
-            <Text style={styles.vacioSub}>Toca + para agregar el primero</Text>
+            <Text style={styles.vacioSub}>Toca + para agregar tu primer repuesto</Text>
           </View>
         ) : (
           <FlatList
@@ -370,148 +427,214 @@ export default function InventarioScreen() {
             renderItem={({ item }) => (
               <TarjetaProducto
                 item={item}
-                onEliminar={eliminarItem}
+                onEliminar={confirmarEliminar}
                 onVerDetalle={verDetalle}
               />
             )}
             contentContainerStyle={styles.lista}
-            scrollEventThrottle={16}
-            directionalLockEnabled={true}
             ItemSeparatorComponent={() => <View style={styles.separador} />}
           />
         )}
 
-        {/* Botón flotante */}
-        <TouchableOpacity style={styles.botonFlotante} onPress={() => setModalAgregar(true)}>
-          <Ionicons name="add" size={30} color="#fff" />
+        {/* Botón flotante para agregar producto */}
+        <TouchableOpacity
+          style={styles.botonFlotante}
+          onPress={() => setModalAgregar(true)}
+        >
+          <Ionicons name="add" size={32} color="#fff" />
         </TouchableOpacity>
 
         {/* ===================== MODAL DETALLE ===================== */}
-        <Modal visible={modalDetalle} animationType="slide" presentationStyle="pageSheet">
+        <Modal
+          visible={modalDetalle}
+          animationType="slide"
+          presentationStyle="pageSheet"
+          onRequestClose={() => {
+            cerrarPanelStock();
+            setModalDetalle(false);
+          }}
+        >
           {productoSeleccionado && (
-            <View style={styles.modal}>
-              <View style={styles.modalHeader}>
-                <Text style={styles.modalTitulo} numberOfLines={1}>
-                  {productoSeleccionado.nombre}
-                </Text>
-                <TouchableOpacity onPress={() => setModalDetalle(false)}>
-                  <Ionicons name="close" size={24} color={COLORS.textoGris} />
-                </TouchableOpacity>
-              </View>
+            /*
+              KeyboardAvoidingView evita que el teclado tape el contenido.
+              En iOS usa 'padding', en Android usa 'height'.
+            */
+            <KeyboardAvoidingView
+              style={{ flex: 1 }}
+              behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+              keyboardVerticalOffset={Platform.OS === 'ios' ? 0 : 0}
+            >
+              <View style={styles.modal}>
+                <View style={styles.modalHeader}>
+                  <Text style={styles.modalTitulo} numberOfLines={2}>
+                    {productoSeleccionado.nombre}
+                  </Text>
+                  <TouchableOpacity onPress={() => {
+                    cerrarPanelStock();
+                    setModalDetalle(false);
+                  }}>
+                    <Ionicons name="close" size={24} color={COLORS.textoGris} />
+                  </TouchableOpacity>
+                </View>
 
-              <ScrollView showsVerticalScrollIndicator={false}>
+                {/* ref en el ScrollView para poder hacer scrollToEnd */}
+                <ScrollView
+                  ref={scrollDetalleRef}
+                  showsVerticalScrollIndicator={false}
+                  keyboardShouldPersistTaps="handled"
+                >
 
-                {/* Galería — toca para ver en grande con zoom */}
-                {productoSeleccionado.imagenes?.length > 0 && (
-                  <>
-                    <ScrollView
-                      horizontal
-                      showsHorizontalScrollIndicator={false}
-                      style={{ marginBottom: 20 }}
-                    >
-                      {productoSeleccionado.imagenes.map((uri, i) => (
+                  {/* Fotos del producto */}
+                  {productoSeleccionado.imagenes && productoSeleccionado.imagenes.length > 0 && (
+                    <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+                      {productoSeleccionado.imagenes.map((uri, index) => (
                         <TouchableOpacity
-                          key={i}
-                          onPress={() => {
-                            setImagenVisor(uri);
-                            setVisorVisible(true);
-                          }}
+                          key={index}
+                          style={{ position: 'relative', marginRight: 10 }}
+                          onPress={() => { setImagenVisor(uri); setVisorVisible(true); }}
                           activeOpacity={0.85}
                         >
-                          <Image
-                            source={{ uri }}
-                            style={styles.imagenDetalle}
-                            resizeMode="cover"
-                          />
-                          {/* Ícono lupa en esquina */}
+                          <Image source={{ uri }} style={styles.imagenDetalle} resizeMode="cover" />
                           <View style={styles.lupaOverlay}>
-                            <Ionicons name="expand-outline" size={14} color="#fff" />
+                            <Ionicons name="search" size={14} color="#fff" />
                           </View>
                         </TouchableOpacity>
                       ))}
                     </ScrollView>
+                  )}
 
-                    {/* Visor pantalla completa */}
-                    <VisorImagen
-                      uri={imagenVisor}
-                      visible={visorVisible}
-                      onCerrar={() => setVisorVisible(false)}
-                    />
-                  </>
-                )}
+                  {/* Grid de datos */}
+                  <View style={styles.datosGrid}>
+                    <View style={styles.datoBloque}>
+                      <Text style={styles.datoLabel}>Stock actual</Text>
+                      <Text style={[
+                        styles.datoValor,
+                        { color: productoSeleccionado.cantidad <= 2 ? COLORS.advertencia : COLORS.textoBlanco }
+                      ]}>
+                        {productoSeleccionado.cantidad}
+                      </Text>
+                    </View>
+                    <View style={styles.datoBloque}>
+                      <Text style={styles.datoLabel}>Ganancia unitaria</Text>
+                      <Text style={[styles.datoValor, { color: COLORS.acento }]}>
+                        Bs {calcularGanancia(productoSeleccionado.precioCompra, productoSeleccionado.precioVenta).toFixed(2)}
+                      </Text>
+                    </View>
+                    <View style={styles.datoBloque}>
+                      <Text style={styles.datoLabel}>Precio compra</Text>
+                      <Text style={styles.datoValor}>Bs {productoSeleccionado.precioCompra}</Text>
+                    </View>
+                    <View style={styles.datoBloque}>
+                      <Text style={styles.datoLabel}>Precio venta</Text>
+                      <Text style={styles.datoValor}>Bs {productoSeleccionado.precioVenta}</Text>
+                    </View>
+                  </View>
 
-                {/* Grid de datos */}
-                <View style={styles.datosGrid}>
-                  <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Compra</Text>
-                    <Text style={styles.datoValor}>Bs {productoSeleccionado.precioCompra}</Text>
-                  </View>
-                  <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Venta</Text>
-                    <Text style={styles.datoValor}>Bs {productoSeleccionado.precioVenta}</Text>
-                  </View>
-                  <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Ganancia unit.</Text>
-                    <Text style={[styles.datoValor, { color: COLORS.exito }]}>
-                      Bs {calcularGanancia(productoSeleccionado.precioCompra, productoSeleccionado.precioVenta)}
-                    </Text>
-                  </View>
-                  <View style={styles.datoBloque}>
-                    <Text style={styles.datoLabel}>Stock actual</Text>
-                    <Text style={[styles.datoValor, {
-                      color: productoSeleccionado.cantidad <= 2 ? COLORS.advertencia : COLORS.textoBlanco
-                    }]}>
-                      {productoSeleccionado.cantidad}
-                    </Text>
-                  </View>
-                </View>
-
-                {/* Ventas — solo totales, sin lista detallada */}
-                <View style={styles.seccionVentas}>
-                  <Text style={styles.seccionTitulo}>📦 Ventas de este producto</Text>
-
-                  {ventasProducto.length === 0 ? (
-                    <Text style={styles.sinVentas}>Aún no hay ventas registradas</Text>
+                  {/* ============================================ */}
+                  {/* BOTÓN AÑADIR STOCK — abre panel inline       */}
+                  {/* ============================================ */}
+                  {!stockPanelVisible ? (
+                    <TouchableOpacity
+                      style={styles.botonAnadirStock}
+                      onPress={abrirPanelStock}
+                    >
+                      <Ionicons name="add-circle-outline" size={22} color="#fff" style={{ marginRight: 8 }} />
+                      <Text style={styles.textoBotonStock}>Añadir Stock</Text>
+                    </TouchableOpacity>
                   ) : (
-                    <View style={styles.resumenVentas}>
-                      <View style={styles.resumenBloque}>
-                        <Text style={styles.datoLabel}>Unidades vendidas</Text>
-                        <Text style={[styles.datoValor, { color: COLORS.acento }]}>
-                          {totalUnidades(ventasProducto)}
-                        </Text>
+                    /* ============================================ */
+                    /* PANEL INLINE DE STOCK                        */
+                    /* Aparece en lugar del botón, dentro del       */
+                    /* ScrollView, visible sin tapar nada           */
+                    /* ============================================ */
+                    <View style={styles.panelStock}>
+                      <Text style={styles.panelStockTitulo}>¿Cuántas unidades llegaron?</Text>
+
+                      <View style={styles.panelStockFila}>
+                        <TextInput
+                          ref={inputStockRef}
+                          style={styles.inputStockInline}
+                          placeholder="0"
+                          placeholderTextColor={COLORS.textoGris}
+                          keyboardType="number-pad"
+                          value={cantidadAAnadir}
+                          onChangeText={setCantidadAAnadir}
+                          returnKeyType="done"
+                          onSubmitEditing={handleAnadirStock}
+                        />
+
+                        <TouchableOpacity
+                          style={styles.botonConfirmarInline}
+                          onPress={handleAnadirStock}
+                        >
+                          <Ionicons name="checkmark" size={22} color="#fff" />
+                        </TouchableOpacity>
+
+                        <TouchableOpacity
+                          style={styles.botonCancelarInline}
+                          onPress={cerrarPanelStock}
+                        >
+                          <Ionicons name="close" size={22} color={COLORS.textoGris} />
+                        </TouchableOpacity>
                       </View>
-                      <View style={styles.resumenBloque}>
-                        <Text style={styles.datoLabel}>Total recaudado</Text>
-                        <Text style={[styles.datoValor, { color: COLORS.exito }]}>
-                          Bs {totalRecaudado(ventasProducto)}
+
+                      {/* Muestra el nuevo total en tiempo real */}
+                      {cantidadAAnadir !== '' && !isNaN(parseInt(cantidadAAnadir)) && parseInt(cantidadAAnadir) > 0 && (
+                        <Text style={styles.panelStockPreview}>
+                          Nuevo stock: {productoSeleccionado.cantidad + parseInt(cantidadAAnadir)} unidades
                         </Text>
-                      </View>
+                      )}
                     </View>
                   )}
-                </View>
 
-                {/* Link proveedor */}
-                {productoSeleccionado.linkProveedor ? (
+                  {/* Historial de ventas de este producto */}
+                  <View style={styles.seccionVentas}>
+                    <Text style={styles.seccionTitulo}>Ventas de este producto</Text>
+                    {ventasProducto.length === 0 ? (
+                      <Text style={styles.sinVentas}>Sin ventas registradas aún</Text>
+                    ) : (
+                      <>
+                        <View style={styles.resumenVentas}>
+                          <View style={styles.resumenBloque}>
+                            <Text style={styles.datoLabel}>Unidades vendidas</Text>
+                            <Text style={styles.datoValor}>
+                              {ventasProducto.reduce((acc, v) => acc + v.cantidad, 0)}
+                            </Text>
+                          </View>
+                          <View style={styles.resumenBloque}>
+                            <Text style={styles.datoLabel}>Total generado</Text>
+                            <Text style={[styles.datoValor, { color: COLORS.acento }]}>
+                              Bs {ventasProducto.reduce((acc, v) => acc + (v.precioVenta * v.cantidad), 0).toFixed(2)}
+                            </Text>
+                          </View>
+                        </View>
+                      </>
+                    )}
+                  </View>
+
+                  {/* Link proveedor */}
+                  {productoSeleccionado.linkProveedor ? (
+                    <TouchableOpacity
+                      style={styles.botonLink}
+                      onPress={() => Linking.openURL(productoSeleccionado.linkProveedor)}
+                    >
+                      <Ionicons name="link-outline" size={20} color={COLORS.acento} />
+                      <Text style={styles.botonLinkTexto}>Ver proveedor</Text>
+                    </TouchableOpacity>
+                  ) : null}
+
+                  {/* Botón eliminar */}
                   <TouchableOpacity
-                    style={styles.botonLink}
-                    onPress={() => Linking.openURL(productoSeleccionado.linkProveedor)}
+                    style={styles.botonEliminar}
+                    onPress={() => confirmarEliminar(productoSeleccionado.id, productoSeleccionado.nombre)}
                   >
-                    <Ionicons name="link-outline" size={18} color={COLORS.acento} />
-                    <Text style={styles.botonLinkTexto}>Ver proveedor</Text>
+                    <Ionicons name="trash-outline" size={20} color="#fff" />
+                    <Text style={styles.botonEliminarTexto}>Eliminar producto</Text>
                   </TouchableOpacity>
-                ) : null}
 
-                {/* Eliminar */}
-                <TouchableOpacity
-                  style={styles.botonEliminar}
-                  onPress={() => eliminarItem(productoSeleccionado.id, productoSeleccionado.nombre)}
-                >
-                  <Ionicons name="trash-outline" size={18} color="#fff" />
-                  <Text style={styles.botonEliminarTexto}>Eliminar producto</Text>
-                </TouchableOpacity>
-
-              </ScrollView>
-            </View>
+                </ScrollView>
+              </View>
+            </KeyboardAvoidingView>
           )}
         </Modal>
 
@@ -525,7 +648,7 @@ export default function InventarioScreen() {
               </TouchableOpacity>
             </View>
 
-            <ScrollView showsVerticalScrollIndicator={false}>
+            <ScrollView showsVerticalScrollIndicator={false} keyboardShouldPersistTaps="handled">
               <Text style={styles.campoLabel}>Imágenes</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
                 {imagenes.map((uri, index) => (
@@ -582,7 +705,6 @@ export default function InventarioScreen() {
 // ============================================
 const styles = StyleSheet.create({
   fondo: { flex: 1, backgroundColor: COLORS.fondo },
-
   lista: { paddingHorizontal: 16, paddingTop: 16, paddingBottom: 100 },
   separador: { height: 8 },
 
@@ -639,10 +761,7 @@ const styles = StyleSheet.create({
     alignItems: 'center', marginBottom: 24, marginTop: 16,
   },
   modalTitulo: { fontSize: 20, fontWeight: '700', color: COLORS.textoBlanco, flex: 1, marginRight: 12 },
-
   imagenDetalle: { width: 220, height: 160, borderRadius: 12, marginRight: 10 },
-
-  // Ícono lupa encima de cada foto
   lupaOverlay: {
     position: 'absolute', bottom: 8, right: 18,
     backgroundColor: 'rgba(0,0,0,0.55)',
@@ -658,24 +777,91 @@ const styles = StyleSheet.create({
   datoLabel: { fontSize: 12, color: COLORS.textoGris, marginBottom: 4 },
   datoValor: { fontSize: 18, fontWeight: '700', color: COLORS.textoBlanco },
 
-  // Sección ventas
+  // ============================================
+  // BOTÓN AÑADIR STOCK (cuando el panel está cerrado)
+  // ============================================
+  botonAnadirStock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: COLORS.acento,
+    borderRadius: 12,
+    padding: 16,
+    marginBottom: 16,
+  },
+  textoBotonStock: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+
+  // ============================================
+  // PANEL INLINE DE STOCK
+  // Reemplaza el modal flotante — vive dentro del ScrollView
+  // ============================================
+  panelStock: {
+    backgroundColor: COLORS.tarjeta,
+    borderRadius: 14,
+    padding: 16,
+    marginBottom: 16,
+  },
+  panelStockTitulo: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: COLORS.textoBlanco,
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  panelStockFila: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  inputStockInline: {
+    flex: 1,
+    backgroundColor: COLORS.fondo,
+    borderRadius: 10,
+    padding: 14,
+    fontSize: 24,
+    fontWeight: '700',
+    color: COLORS.textoBlanco,
+    textAlign: 'center',
+  },
+  botonConfirmarInline: {
+    backgroundColor: COLORS.acento,
+    borderRadius: 10,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  botonCancelarInline: {
+    backgroundColor: COLORS.tarjeta,
+    borderRadius: 10,
+    width: 52,
+    height: 52,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: COLORS.borde,
+  },
+  panelStockPreview: {
+    marginTop: 10,
+    textAlign: 'center',
+    fontSize: 13,
+    color: COLORS.acento,
+    fontWeight: '500',
+  },
+
   seccionVentas: {
     backgroundColor: COLORS.tarjeta,
     borderRadius: 14,
     padding: 16,
     marginBottom: 16,
   },
-  seccionTitulo: {
-    fontSize: 15, fontWeight: '700',
-    color: COLORS.textoBlanco, marginBottom: 12,
-  },
-  sinVentas: {
-    fontSize: 13, color: COLORS.textoGris,
-    textAlign: 'center', paddingVertical: 12,
-  },
-  resumenVentas: {
-    flexDirection: 'row',
-  },
+  seccionTitulo: { fontSize: 15, fontWeight: '700', color: COLORS.textoBlanco, marginBottom: 12 },
+  sinVentas: { fontSize: 13, color: COLORS.textoGris, textAlign: 'center', paddingVertical: 12 },
+  resumenVentas: { flexDirection: 'row' },
   resumenBloque: { flex: 1, alignItems: 'center' },
 
   botonLink: {

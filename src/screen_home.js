@@ -13,9 +13,8 @@ import COLORS from './colors_config';
 import BigButton from './component_big_button';
 import { getResumenInventario, getProductos } from './logic_inventory';
 import { getResumenVentas, venderProducto } from './logic_sales';
-
-// 👇 Importamos la animación
 import SuccessPayment from './SuccessPayment';
+import NumeroRuleta from './NumeroRuleta';
 
 export default function HomeScreen({ navigation }) {
   const [inventario, setInventario] = useState({
@@ -28,14 +27,9 @@ export default function HomeScreen({ navigation }) {
   const [productos, setProductos] = useState([]);
   const [productoSeleccionado, setProductoSeleccionado] = useState(null);
   const [cantidad, setCantidad] = useState(1);
-
-  // --- Estado de la animación con datos reales ---
   const [showSuccess, setShowSuccess] = useState(false);
   const [datosVenta, setDatosVenta] = useState({
-    ganancia: 0,
-    totalVenta: 0,
-    nombreProducto: '',
-    cantidad: 1,
+    ganancia: 0, totalVenta: 0, nombreProducto: '', cantidad: 1,
   });
 
   useFocusEffect(
@@ -79,10 +73,8 @@ export default function HomeScreen({ navigation }) {
       return;
     }
 
-    // Cerramos el modal de selección
     setModalVisible(false);
 
-    // Guardamos los datos reales de la venta para pasarlos a la animación
     setDatosVenta({
       ganancia: resultado.venta.ganancia,
       totalVenta: productoSeleccionado.precioVenta * cantidad,
@@ -90,10 +82,7 @@ export default function HomeScreen({ navigation }) {
       cantidad: cantidad,
     });
 
-    // Disparamos la animación
     setShowSuccess(true);
-
-    // Recargamos los datos del home
     cargarDatos();
   }
 
@@ -105,41 +94,59 @@ export default function HomeScreen({ navigation }) {
         <Text style={styles.saludo}>{getSaludo()}</Text>
         <Text style={styles.titulo}>Ronmel Gear Center</Text>
 
+        {/* Tarjetas inventario */}
         <Text style={styles.seccionTitulo}>Inventario</Text>
         <View style={styles.filaTarjetas}>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Productos</Text>
-            <Text style={styles.tarjetaNumero}>{inventario.totalProductos}</Text>
+            <NumeroRuleta
+              valor={inventario.totalProductos}
+              style={styles.tarjetaNumero}
+            />
           </View>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Invertido</Text>
-            <Text style={styles.tarjetaNumero}>Bs {inventario.totalInvertido}</Text>
+            <NumeroRuleta
+              valor={inventario.totalInvertido}
+              prefix="Bs "
+              style={styles.tarjetaNumero}
+            />
           </View>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Ganancia pot.</Text>
-            <Text style={[styles.tarjetaNumero, { color: COLORS.exito }]}>
-              Bs {inventario.totalGanancia}
-            </Text>
+            <NumeroRuleta
+              valor={inventario.totalGanancia}
+              prefix="Bs "
+              style={[styles.tarjetaNumero, { color: COLORS.exito }]}
+            />
           </View>
         </View>
 
+        {/* Tarjetas ventas */}
         <Text style={styles.seccionTitulo}>Ventas</Text>
         <View style={styles.filaTarjetas}>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Ventas hoy</Text>
-            <Text style={styles.tarjetaNumero}>{ventas.cantidadHoy}</Text>
+            <NumeroRuleta
+              valor={ventas.cantidadHoy}
+              style={styles.tarjetaNumero}
+            />
           </View>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Ganancia hoy</Text>
-            <Text style={[styles.tarjetaNumero, { color: COLORS.exito }]}>
-              Bs {ventas.gananciaHoy}
-            </Text>
+            <NumeroRuleta
+              valor={ventas.gananciaHoy}
+              prefix="Bs "
+              style={[styles.tarjetaNumero, { color: COLORS.exito }]}
+            />
           </View>
           <View style={styles.tarjeta}>
             <Text style={styles.tarjetaLabel}>Este mes</Text>
-            <Text style={[styles.tarjetaNumero, { color: COLORS.acento }]}>
-              Bs {ventas.gananciaMes}
-            </Text>
+            <NumeroRuleta
+              valor={ventas.gananciaMes}
+              prefix="Bs "
+              style={[styles.tarjetaNumero, { color: COLORS.acento }]}
+            />
           </View>
         </View>
 
@@ -233,7 +240,7 @@ export default function HomeScreen({ navigation }) {
         </View>
       </Modal>
 
-      {/* 👇 Animación de éxito con datos reales de la venta */}
+      {/* Animación de éxito */}
       <SuccessPayment
         visible={showSuccess}
         ganancia={datosVenta.ganancia}

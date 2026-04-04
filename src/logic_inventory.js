@@ -66,5 +66,18 @@ export async function reducirStock(productoId, cantidadVendida) {
 
   return { exito: true };
 }
+// Reponer/actualizar stock de un producto
+export async function reponerStock(productoId, cantidadAgregar) {
+  const productos = await getProductos();
+  const producto = productos.find(p => p.id === productoId);
+
+  if (!producto) return { exito: false, mensaje: 'Producto no encontrado' };
+
+  await actualizarProducto(productoId, {
+    cantidad: producto.cantidad + parseInt(cantidadAgregar) || 0,
+  });
+
+  return { exito: true, nuevaCantidad: producto.cantidad + parseInt(cantidadAgregar) };
+}
 
 export { getProductos, eliminarProducto, actualizarProducto };

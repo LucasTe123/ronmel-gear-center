@@ -4,7 +4,7 @@
 // - KeyboardAvoidingView para que no tape el teclado
 // - Scroll automático al input cuando se abre
 // ============================================
-
+import ImageView from 'react-native-image-viewing';
 import React, { useState, useCallback, useRef } from 'react';
 import {
   View, Text, StyleSheet, FlatList,
@@ -29,174 +29,6 @@ import { getVentas } from './storage_manager';
 
 const { width: ANCHO, height: ALTO } = Dimensions.get('window');
 
-// ============================================
-// VISOR DE IMAGEN CON ZOOM Y ARRASTRE
-// ============================================
-function VisorImagen({ uri, visible, onCerrar }) {
-  const escala = useRef(new Animated.Value(1)).current;
-  const translateX = useRef(new Animated.Value(0)).current;
-  const translateY = useRef(new Animated.Value(0)).current;
-
-  const lastScale = useRef(1);
-  const lastTranslateX = useRef(0);
-  const lastTranslateY = useRef(0);
-  const ultimoTap = useRef(0);
-
-  function cerrar() {
-    escala.setValue(1);
-    translateX.setValue(0);
-    translateY.setValue(0);
-    lastScale.current = 1;
-    lastTranslateX.current = 0;
-    lastTranslateY.current = 0;
-    onCerrar();
-  }
-
-  function manejarTap() {
-    const ahora = Date.now();
-
-    if (ahora - ultimoTap.current < 300) {
-      Animated.spring(escala, {
-        toValue: 1,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.spring(translateX, {
-        toValue: 0,
-        useNativeDriver: true,
-      }).start();
-
-      Animated.spring(translateY, {
-        toValue: 0,
-        useNativeDriver: true,
-      }).start();
-
-      lastScale.current = 1;
-      lastTranslateX.current = 0;
-      lastTranslateY.current = 0;
-    }
-
-    ultimoTap.current = ahora;
-  }
-
-  const onPinchEvent = Animated.event(
-    [{ nativeEvent: { scale: escala } }],
-    { useNativeDriver: true }
-  );
-
-  function onPinchStateChange(event) {
-    if (event.nativeEvent.oldState === State.ACTIVE) {
-      let nuevaEscala = lastScale.current * event.nativeEvent.scale;
-
-      if (nuevaEscala < 1) nuevaEscala = 1;
-      if (nuevaEscala > 4) nuevaEscala = 4;
-
-      lastScale.current = nuevaEscala;
-      escala.setValue(nuevaEscala);
-    }
-  }
-
-  const onPanEvent = Animated.event(
-    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
-    { useNativeDriver: true }
-  );
-
-  function onPanStateChange(event) {
-    if (event.nativeEvent.oldState === State.ACTIVE) {
-      lastTranslateX.current += event.nativeEvent.translationX;
-      lastTranslateY.current += event.nativeEvent.translationY;
-
-      translateX.setValue(lastTranslateX.current);
-      translateY.setValue(lastTranslateY.current);
-    }
-  }
-
-  if (!uri) return null;
-
-  return (
-    <Modal visible={visible} transparent animationType="fade" statusBarTranslucent>
-      <View style={visorEstilos.fondo}>
-        <TouchableOpacity style={visorEstilos.botonCerrar} onPress={cerrar}>
-          <Ionicons name="close" size={26} color="#fff" />
-        </TouchableOpacity>
-
-        <Text style={visorEstilos.ayuda}>
-          Pellizca para zoom · Arrastra para mover · Doble tap para resetear
-        </Text>
-
-        <TouchableOpacity
-          activeOpacity={1}
-          style={visorEstilos.contenedorImagen}
-          onPress={manejarTap}
-        >
-          <PanGestureHandler
-            onGestureEvent={onPanEvent}
-            onHandlerStateChange={onPanStateChange}
-            minPointers={1}
-            maxPointers={2}
-          >
-            <Animated.View>
-              <PinchGestureHandler
-                onGestureEvent={onPinchEvent}
-                onHandlerStateChange={onPinchStateChange}
-              >
-                <Animated.Image
-                  source={{ uri }}
-                  style={[
-                    visorEstilos.imagen,
-                    {
-                      transform: [
-                        { scale: escala },
-                        { translateX: translateX },
-                        { translateY: translateY },
-                      ],
-                    },
-                  ]}
-                  resizeMode="contain"
-                />
-              </PinchGestureHandler>
-            </Animated.View>
-          </PanGestureHandler>
-        </TouchableOpacity>
-      </View>
-    </Modal>
-  );
-}
-
-const visorEstilos = StyleSheet.create({
-  fondo: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.97)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  botonCerrar: {
-    position: 'absolute',
-    top: 56,
-    right: 20,
-    zIndex: 10,
-    backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20,
-    padding: 8,
-  },
-  ayuda: {
-    position: 'absolute',
-    bottom: 48,
-    color: 'rgba(255,255,255,0.50)',
-    fontSize: 12,
-    zIndex: 10,
-  },
-  contenedorImagen: {
-    width: ANCHO,
-    height: ALTO * 0.75,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  imagen: {
-    width: ANCHO,
-    height: ALTO * 0.75,
-  },
-});
 
 // ============================================
 // TARJETA CON SWIPE PARA BORRAR
@@ -297,10 +129,10 @@ export default function InventarioScreen() {
   const [ventasProducto, setVentasProducto] = useState([]);
   const [imagenes, setImagenes] = useState([]);
 
-  // Estado visor imagen
-  const [imagenVisor, setImagenVisor] = useState(null);
-  const [visorVisible, setVisorVisible] = useState(false);
-
+  // Estado visor imagen — ahora maneja lista e índice
+const [visorVisible, setVisorVisible] = useState(false);
+const [visorImagenes, setVisorImagenes] = useState([]);
+const [visorIndice, setVisorIndice] = useState(0);
   // ============================================
   // ESTADO PARA AÑADIR STOCK — AHORA ES INLINE
   // No hay modal separado, se expande dentro del detalle
@@ -495,11 +327,14 @@ export default function InventarioScreen() {
           }}
         >
           {/* Visor de imagen a pantalla completa */}
-        <VisorImagen
-          uri={imagenVisor}
-          visible={visorVisible}
-          onCerrar={() => { setVisorVisible(false); setImagenVisor(null); }}
-        />
+        <ImageView
+  images={visorImagenes}
+  imageIndex={visorIndice}
+  visible={visorVisible}
+  onRequestClose={() => setVisorVisible(false)}
+  swipeToCloseEnabled={true}
+  doubleTapToZoomEnabled={true}
+/>
           {productoSeleccionado && (
             /*
               KeyboardAvoidingView evita que el teclado tape el contenido.
@@ -537,7 +372,13 @@ export default function InventarioScreen() {
                         <TouchableOpacity
                           key={index}
                           style={{ position: 'relative', marginRight: 10 }}
-                          onPress={() => { setImagenVisor(uri); setVisorVisible(true); }}
+                          onPress={() => {
+  setVisorImagenes(
+    productoSeleccionado.imagenes.map(i => ({ uri: i }))
+  );
+  setVisorIndice(index);
+  setVisorVisible(true);
+}}
                           activeOpacity={0.85}
                         >
                           <Image source={{ uri }} style={styles.imagenDetalle} resizeMode="cover" />

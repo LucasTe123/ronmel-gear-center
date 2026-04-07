@@ -33,7 +33,9 @@ export default function HomeScreen({ navigation }) {
   });
 
   useFocusEffect(
-    useCallback(() => { cargarDatos(); }, [])
+    useCallback(() => {
+      cargarDatos();
+    }, [])
   );
 
   async function cargarDatos() {
@@ -60,6 +62,16 @@ export default function HomeScreen({ navigation }) {
     setModalVisible(true);
   }
 
+  // ============================================
+  // CERRAR MODAL — limpia todo al cerrar
+  // Esto evita que el producto anterior se quede pegado
+  // ============================================
+  function cerrarModal() {
+    setModalVisible(false);
+    setProductoSeleccionado(null);
+    setCantidad(1);
+  }
+
   async function confirmarVenta() {
     if (!productoSeleccionado) return;
     if (cantidad < 1) {
@@ -73,14 +85,18 @@ export default function HomeScreen({ navigation }) {
       return;
     }
 
-    setModalVisible(false);
-
     setDatosVenta({
       ganancia: resultado.venta.ganancia,
       totalVenta: productoSeleccionado.precioVenta * cantidad,
       nombreProducto: productoSeleccionado.nombre,
       cantidad: cantidad,
     });
+
+    // ============================================
+    // LIMPIEZA DESPUÉS DE VENDER
+    // Cerramos modal y limpiamos selección
+    // ============================================
+    cerrarModal();
 
     setShowSuccess(true);
     cargarDatos();
@@ -166,11 +182,17 @@ export default function HomeScreen({ navigation }) {
       </View>
 
       {/* Modal de selección de producto */}
-      <Modal visible={modalVisible} animationType="slide" presentationStyle="pageSheet">
+      <Modal
+        visible={modalVisible}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={cerrarModal}
+      >
         <View style={styles.modal}>
           <View style={styles.modalHeader}>
             <Text style={styles.modalTitulo}>Registrar venta</Text>
-            <TouchableOpacity onPress={() => setModalVisible(false)}>
+            {/* ← Ahora usa cerrarModal en vez de solo setModalVisible(false) */}
+            <TouchableOpacity onPress={cerrarModal}>
               <Ionicons name="close" size={24} color={COLORS.textoGris} />
             </TouchableOpacity>
           </View>
@@ -203,7 +225,10 @@ export default function HomeScreen({ navigation }) {
 
               <TouchableOpacity
                 style={styles.botonVolver}
-                onPress={() => setProductoSeleccionado(null)}
+                onPress={() => {
+                  setProductoSeleccionado(null);
+                  setCantidad(1);
+                }}
               >
                 <Text style={styles.botonVolverTexto}>← Cambiar producto</Text>
               </TouchableOpacity>

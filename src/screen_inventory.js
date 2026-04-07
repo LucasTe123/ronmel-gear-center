@@ -34,60 +34,80 @@ const { width: ANCHO, height: ALTO } = Dimensions.get('window');
 // ============================================
 function VisorImagen({ uri, visible, onCerrar }) {
   const escala = useRef(new Animated.Value(1)).current;
-  const escalaBase = useRef(1);
-  const traduccionX = useRef(new Animated.Value(0)).current;
-  const traduccionY = useRef(new Animated.Value(0)).current;
-  const posicionBase = useRef({ x: 0, y: 0 });
+  const translateX = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(0)).current;
+
+  const lastScale = useRef(1);
+  const lastTranslateX = useRef(0);
+  const lastTranslateY = useRef(0);
   const ultimoTap = useRef(0);
 
   function cerrar() {
     escala.setValue(1);
-    escalaBase.current = 1;
-    traduccionX.setValue(0);
-    traduccionY.setValue(0);
-    posicionBase.current = { x: 0, y: 0 };
+    translateX.setValue(0);
+    translateY.setValue(0);
+    lastScale.current = 1;
+    lastTranslateX.current = 0;
+    lastTranslateY.current = 0;
     onCerrar();
   }
 
   function manejarTap() {
     const ahora = Date.now();
+
     if (ahora - ultimoTap.current < 300) {
-      Animated.spring(escala, { toValue: 1, useNativeDriver: true }).start();
-      Animated.spring(traduccionX, { toValue: 0, useNativeDriver: true }).start();
-      Animated.spring(traduccionY, { toValue: 0, useNativeDriver: true }).start();
-      escalaBase.current = 1;
-      posicionBase.current = { x: 0, y: 0 };
+      Animated.spring(escala, {
+        toValue: 1,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateX, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      Animated.spring(translateY, {
+        toValue: 0,
+        useNativeDriver: true,
+      }).start();
+
+      lastScale.current = 1;
+      lastTranslateX.current = 0;
+      lastTranslateY.current = 0;
     }
+
     ultimoTap.current = ahora;
   }
 
-  const manejarPellizco = Animated.event(
+  const onPinchEvent = Animated.event(
     [{ nativeEvent: { scale: escala } }],
     { useNativeDriver: true }
   );
 
-  function alSoltarPellizco(event) {
-    if (event.nativeEvent.state === State.END) {
-      const nuevaEscala = escalaBase.current * event.nativeEvent.scale;
-      const escalaFinal = Math.min(Math.max(nuevaEscala, 1), 4);
-      escalaBase.current = escalaFinal;
-      escala.setValue(escalaFinal);
+  function onPinchStateChange(event) {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      let nuevaEscala = lastScale.current * event.nativeEvent.scale;
+
+      if (nuevaEscala < 1) nuevaEscala = 1;
+      if (nuevaEscala > 4) nuevaEscala = 4;
+
+      lastScale.current = nuevaEscala;
+      escala.setValue(nuevaEscala);
     }
   }
 
-  const manejarArrastre = Animated.event(
-    [{ nativeEvent: { translationX: traduccionX, translationY: traduccionY } }],
+  const onPanEvent = Animated.event(
+    [{ nativeEvent: { translationX: translateX, translationY: translateY } }],
     { useNativeDriver: true }
   );
 
-  function alSoltarArrastre(event) {
-    if (event.nativeEvent.state === State.END) {
-      posicionBase.current = {
-        x: posicionBase.current.x + event.nativeEvent.translationX,
-        y: posicionBase.current.y + event.nativeEvent.translationY,
-      };
-      traduccionX.setValue(posicionBase.current.x);
-      traduccionY.setValue(posicionBase.current.y);
+  function onPanStateChange(event) {
+    if (event.nativeEvent.oldState === State.ACTIVE) {
+      lastTranslateX.current += event.nativeEvent.translationX;
+      lastTranslateY.current += event.nativeEvent.translationY;
+
+      translateX.setValue(lastTranslateX.current);
+      translateY.setValue(lastTranslateY.current);
     }
   }
 
@@ -99,38 +119,45 @@ function VisorImagen({ uri, visible, onCerrar }) {
         <TouchableOpacity style={visorEstilos.botonCerrar} onPress={cerrar}>
           <Ionicons name="close" size={26} color="#fff" />
         </TouchableOpacity>
-        <Text style={visorEstilos.ayuda}>Pellizca · Arrastra · Doble tap para resetear</Text>
-        <PanGestureHandler
-          onGestureEvent={manejarArrastre}
-          onHandlerStateChange={alSoltarArrastre}
-        >
-          <Animated.View>
-            <PinchGestureHandler
-              onGestureEvent={manejarPellizco}
-              onHandlerStateChange={alSoltarPellizco}
-            >
-              <Animated.Image
-                source={{ uri }}
-                style={[
-                  visorEstilos.imagen,
-                  {
-                    transform: [
-                      { scale: escala },
-                      { translateX: traduccionX },
-                      { translateY: traduccionY },
-                    ],
-                  },
-                ]}
-                resizeMode="contain"
-              />
-            </PinchGestureHandler>
-          </Animated.View>
-        </PanGestureHandler>
+
+        <Text style={visorEstilos.ayuda}>
+          Pellizca para zoom · Arrastra para mover · Doble tap para resetear
+        </Text>
+
         <TouchableOpacity
-          style={visorEstilos.zonaTap}
-          onPress={manejarTap}
           activeOpacity={1}
-        />
+          style={visorEstilos.contenedorImagen}
+          onPress={manejarTap}
+        >
+          <PanGestureHandler
+            onGestureEvent={onPanEvent}
+            onHandlerStateChange={onPanStateChange}
+            minPointers={1}
+            maxPointers={2}
+          >
+            <Animated.View>
+              <PinchGestureHandler
+                onGestureEvent={onPinchEvent}
+                onHandlerStateChange={onPinchStateChange}
+              >
+                <Animated.Image
+                  source={{ uri }}
+                  style={[
+                    visorEstilos.imagen,
+                    {
+                      transform: [
+                        { scale: escala },
+                        { translateX: translateX },
+                        { translateY: translateY },
+                      ],
+                    },
+                  ]}
+                  resizeMode="contain"
+                />
+              </PinchGestureHandler>
+            </Animated.View>
+          </PanGestureHandler>
+        </TouchableOpacity>
       </View>
     </Modal>
   );
@@ -144,21 +171,30 @@ const visorEstilos = StyleSheet.create({
     alignItems: 'center',
   },
   botonCerrar: {
-    position: 'absolute', top: 56, right: 20, zIndex: 10,
+    position: 'absolute',
+    top: 56,
+    right: 20,
+    zIndex: 10,
     backgroundColor: 'rgba(255,255,255,0.15)',
-    borderRadius: 20, padding: 8,
+    borderRadius: 20,
+    padding: 8,
   },
   ayuda: {
-    position: 'absolute', bottom: 48,
-    color: 'rgba(255,255,255,0.35)',
-    fontSize: 12, zIndex: 10,
-  },
-  imagen: { width: ANCHO, height: ALTO * 0.75 },
-  zonaTap: {
     position: 'absolute',
+    bottom: 48,
+    color: 'rgba(255,255,255,0.50)',
+    fontSize: 12,
+    zIndex: 10,
+  },
+  contenedorImagen: {
     width: ANCHO,
     height: ALTO * 0.75,
-    zIndex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  imagen: {
+    width: ANCHO,
+    height: ALTO * 0.75,
   },
 });
 
@@ -329,20 +365,29 @@ export default function InventarioScreen() {
     cargarProductos();
   }
 
-  async function confirmarEliminar(id, nombre) {
-    Alert.alert(
-      'Eliminar producto',
-      `¿Eliminar "${nombre}"?`,
-      [
-        { text: 'Cancelar', style: 'cancel' },
-        { text: 'Eliminar', style: 'destructive', onPress: async () => {
+ async function confirmarEliminar(id, nombre) {
+  Alert.alert(
+    'Eliminar producto',
+    `¿Eliminar "${nombre}"?`,
+    [
+      { text: 'Cancelar', style: 'cancel' },
+      {
+        text: 'Eliminar',
+        style: 'destructive',
+        onPress: async () => {
           await eliminarProducto(id);
+
+          cerrarPanelStock();
           setModalDetalle(false);
-          cargarProductos();
-        }},
-      ]
-    );
-  }
+          setProductoSeleccionado(null);
+          setVentasProducto([]);
+
+          await cargarProductos();
+        },
+      },
+    ]
+  );
+}
 
   // ============================================
   // ABRIR PANEL DE STOCK INLINE

@@ -406,12 +406,7 @@ export default function InventarioScreen() {
     <GestureHandlerRootView style={{ flex: 1 }}>
       <View style={styles.fondo}>
 
-        {/* Visor de imagen a pantalla completa */}
-        <VisorImagen
-          uri={imagenVisor}
-          visible={visorVisible}
-          onCerrar={() => { setVisorVisible(false); setImagenVisor(null); }}
-        />
+        
 
         {/* Lista de productos o estado vacío */}
         {productos.length === 0 ? (
@@ -454,6 +449,12 @@ export default function InventarioScreen() {
             setModalDetalle(false);
           }}
         >
+          {/* Visor de imagen a pantalla completa */}
+        <VisorImagen
+          uri={imagenVisor}
+          visible={visorVisible}
+          onCerrar={() => { setVisorVisible(false); setImagenVisor(null); }}
+        />
           {productoSeleccionado && (
             /*
               KeyboardAvoidingView evita que el teclado tape el contenido.

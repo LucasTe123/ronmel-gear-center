@@ -66,18 +66,35 @@ export async function reducirStock(productoId, cantidadVendida) {
 
   return { exito: true };
 }
-// Reponer/actualizar stock de un producto
+
+// ============================================
+// REPONER STOCK — versión vieja (se mantiene por si acaso)
+// ============================================
 export async function reponerStock(productoId, cantidadAgregar) {
+  return await sumarStockProducto(productoId, cantidadAgregar);
+}
+
+// ============================================
+// SUMAR STOCK — esta es la función que usa screen_inventory.js
+// Si tienes un sincronizador con 3 unidades y llegan 5 más,
+// esto lo convierte en 8 correctamente.
+// ============================================
+export async function sumarStockProducto(productoId, cantidadAgregar) {
   const productos = await getProductos();
   const producto = productos.find(p => p.id === productoId);
 
   if (!producto) return { exito: false, mensaje: 'Producto no encontrado' };
 
+  // Convertimos todo a número para evitar que "3" + 5 = "35"
+  const cantidadActual = parseInt(producto.cantidad) || 0;
+  const cantidadExtra = parseInt(cantidadAgregar) || 0;
+  const cantidadNueva = cantidadActual + cantidadExtra;
+
   await actualizarProducto(productoId, {
-    cantidad: producto.cantidad + parseInt(cantidadAgregar) || 0,
+    cantidad: cantidadNueva,
   });
 
-  return { exito: true, nuevaCantidad: producto.cantidad + parseInt(cantidadAgregar) };
+  return { exito: true, nuevaCantidad: cantidadNueva };
 }
 
 export { getProductos, eliminarProducto, actualizarProducto };

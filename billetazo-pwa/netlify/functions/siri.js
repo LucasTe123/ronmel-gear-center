@@ -107,11 +107,11 @@ async function callAI(systemPrompt, userText) {
     headers: {
       'Authorization': `Bearer ${OR_KEY}`,
       'Content-Type': 'application/json',
-      'HTTP-Referer': 'https://billetazo.netlify.app',
+      'HTTP-Referer': 'https://soft-duckanoo-e4d3bd.netlify.app',
       'X-Title': 'Billetazo',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-001',
+      model: 'google/gemini-2.0-flash-lite-preview-02-05',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userText },

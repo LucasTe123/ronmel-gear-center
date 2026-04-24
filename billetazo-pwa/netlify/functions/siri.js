@@ -18,10 +18,10 @@
 //   USER_UID         = (el UID del usuario, lo copiás de Ajustes en la app)
 // ================================================================
 
-const SIRI_TOKEN    = process.env.SIRI_TOKEN    || 'billetazo-siri-token-2025';
-const OR_KEY        = process.env.OPENROUTER_KEY;
-const FB_API_KEY    = process.env.FIREBASE_API_KEY;
-const FB_PROJECT    = process.env.FIREBASE_PROJECT || 'billetazo-dba3a';
+const SIRI_TOKEN    = process.env.VITE_SIRI_TOKEN || process.env.SIRI_TOKEN || 'billetazo-siri-token-2025';
+const OR_KEY        = process.env.VITE_OPENROUTER_KEY || process.env.OPENROUTER_KEY;
+const FB_API_KEY    = process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+const FB_PROJECT    = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT || 'billetazo-dba3a';
 const USER_UID      = process.env.USER_UID;
 
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;

@@ -60,6 +60,10 @@ html, body, #root {
   color: var(--text-primary);
   -webkit-font-smoothing: antialiased;
   overflow: hidden;
+  touch-action: pan-x pan-y;
+  overscroll-behavior-y: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
 /* ======================
@@ -521,6 +525,8 @@ html, body, #root {
   font-family: inherit;
   transition: all 0.2s;
   outline: none;
+  -webkit-user-select: auto;
+  user-select: auto;
 }
 
 .form-input:focus {

@@ -6,8 +6,9 @@ import React, { useState, useRef } from 'react';
 import { useAuth } from './AuthContext';
 import { useToast } from './Toast';
 import { User, Smartphone, Cpu, Mic, Zap, Check, Copy, Camera, Upload } from 'lucide-react';
-import { auth } from './firebase';
+import { auth, storage } from './firebase';
 import { updateProfile } from 'firebase/auth';
+import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 
 const SHORTCUT_URL = import.meta.env.VITE_SHORTCUT_URL || '#';
 const SIRI_TOKEN   = import.meta.env.VITE_SIRI_TOKEN   || '—';
@@ -73,10 +74,13 @@ export default function Settings() {
         const ctx = canvas.getContext('2d');
         ctx.drawImage(img, 0, 0, width, height);
 
-        // Comprimir en WebP de baja calidad para asegurar que quepa en el Auth profile (< 30kb idealmente)
         const compressedBase64 = canvas.toDataURL('image/webp', 0.6);
         
-        updateProfile(auth.currentUser, { photoURL: compressedBase64 })
+        // Subir a Firebase Storage primero
+        const storageRef = ref(storage, `profiles/${user.uid}.webp`);
+        uploadString(storageRef, compressedBase64, 'data_url')
+          .then(() => getDownloadURL(storageRef))
+          .then((downloadURL) => updateProfile(auth.currentUser, { photoURL: downloadURL }))
           .then(() => {
             toast('Foto de perfil actualizada con éxito');
             setTimeout(() => window.location.reload(), 1000);

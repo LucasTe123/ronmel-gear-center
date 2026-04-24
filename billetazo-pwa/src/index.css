@@ -71,7 +71,7 @@ html, body, #root {
    ====================== */
 .app-layout {
   display: flex;
-  height: 100vh;
+  height: 100dvh; /* Dynamic viewport height to prevent Safari UI clipping */
   overflow: hidden;
   background: var(--bg-base);
   padding: 24px;
@@ -400,6 +400,8 @@ html, body, #root {
 .row-icon-box {
   width: 48px;
   height: 48px;
+  min-width: 48px;
+  flex-shrink: 0;
   border-radius: 12px;
   background: var(--bg-card);
   display: flex;
@@ -410,6 +412,7 @@ html, body, #root {
 
 .row-content {
   flex: 1;
+  min-width: 0;
 }
 
 .row-title {
@@ -417,11 +420,17 @@ html, body, #root {
   font-weight: 600;
   color: var(--text-primary);
   margin-bottom: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .row-subtitle {
   font-size: 13px;
   color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .row-action {
@@ -682,24 +691,27 @@ html, body, #root {
     flex-direction: column;
     padding: 12px;
     gap: 12px;
-    padding-bottom: 0; /* Let sidebar touch bottom */
+    padding-bottom: env(safe-area-inset-bottom, 12px); 
+    height: 100dvh;
   }
   .main-content {
     padding: 20px 16px;
-    margin-bottom: 12px; /* space before sidebar */
-    overflow-x: hidden; /* Prevent horizontal scrolling */
+    margin-bottom: 0; 
+    overflow-x: hidden; 
   }
   .sidebar {
     width: 100%;
-    height: 70px;
+    height: 64px;
     flex-direction: row;
     padding: 0 16px;
     justify-content: space-between;
-    order: 2; /* Put at the bottom */
-    margin-bottom: 20px; /* space from phone bottom edge */
+    order: 2; 
+    margin-bottom: 0;
+    box-shadow: 0 -4px 20px rgba(0,0,0,0.3);
+    z-index: 99;
   }
   .sidebar-brand {
-    display: none; /* Hide logo on mobile */
+    display: none; 
   }
   .sidebar-nav {
     flex-direction: row;
@@ -708,15 +720,14 @@ html, body, #root {
     gap: 4px;
   }
   .sidebar-footer {
-    display: none; /* Hide profile avatar from bottom bar on mobile to save space */
+    display: none; 
   }
   .btn-logout {
     display: none;
   }
   
-  /* Fix tight metrics and layout on mobile */
   .metric-value {
-    font-size: 28px; /* Smaller font to fit */
+    font-size: 28px; 
   }
   .stat-number {
     font-size: 20px;
@@ -727,12 +738,11 @@ html, body, #root {
   .card {
     padding: 16px;
   }
-  /* Fix floating action button positioning to not overlap with new bottom bar */
   .fab {
-    bottom: 100px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
     right: 20px;
   }
   .toast-container {
-    bottom: 100px;
+    bottom: calc(80px + env(safe-area-inset-bottom, 0px));
   }
 }

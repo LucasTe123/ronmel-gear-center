@@ -221,7 +221,7 @@ export default function Inventory() {
               {productosFiltrados.map(p => (
                 <div key={p.id} className="list-row" onClick={() => verDetalle(p)} style={{ cursor: 'pointer' }}>
                   {p.imagenes?.length > 0 ? (
-                    <img src={p.imagenes[0]} alt={p.nombre} style={{ width: 48, height: 48, borderRadius: 12, objectFit: 'cover' }} />
+                    <img src={p.imagenes[0]} alt={p.nombre} style={{ width: 48, height: 48, minWidth: 48, flexShrink: 0, borderRadius: 12, objectFit: 'cover' }} />
                   ) : (
                     <div className="row-icon-box">
                       <ImageIcon size={24} color="var(--text-muted)" />

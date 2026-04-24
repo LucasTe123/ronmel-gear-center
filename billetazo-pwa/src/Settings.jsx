@@ -147,6 +147,21 @@ export default function Settings() {
               <div style={{ fontSize: 12, color: 'var(--text-secondary)', textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 }}>ID de Seguridad (UID)</div>
               <CopyField value={user?.uid || ''} />
            </div>
+
+           <div style={{ borderTop: '1px solid var(--border-color)', paddingTop: 24 }}>
+              <button 
+                 className="btn btn-secondary" 
+                 onClick={async () => {
+                   const { signOut } = await import('./AuthContext');
+                   // Actually we can just use auth from firebase directly
+                   const { auth } = await import('./firebase');
+                   auth.signOut().then(() => window.location.href = '/');
+                 }}
+                 style={{ color: 'var(--status-danger)', borderColor: 'rgba(255, 69, 58, 0.3)', background: 'rgba(255, 69, 58, 0.05)', width: '100%' }}
+              >
+                Cerrar Sesión
+              </button>
+           </div>
         </div>
 
         {/* INTEGRACION IA */}

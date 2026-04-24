@@ -73,31 +73,56 @@ function buildPrompt(cache) {
   const prods = cache.productos || [];
   const bajosStock = prods.filter(p => p.cantidad <= 3);
 
-  return `Sos Billetazo IA, el asistente de negocio personal. Respondés en español rioplatense.
-Tus respuestas son BREVES (máx 2 oraciones) porque Siri las lee en voz alta.
-
-INVENTARIO:
-${prods.map(p => `[${p.id}] ${p.nombre} | Stock: ${p.cantidad} | Precio venta: Bs${p.precioVenta}`).join('\n') || 'Sin productos.'}
-
+  const contexto = `
+INVENTARIO: ${prods.map(p => `[${p.id}] ${p.nombre} (Stock: ${p.cantidad}, Bs${p.precioVenta})`).join(', ') || 'Sin productos'}
 HOY: ${cache.cantidadHoy || 0} ventas — Ganancia Bs${(cache.gananciaHoy || 0).toFixed(2)}
-AYER: Ganancia Bs${(cache.gananciaAyer || 0).toFixed(2)}
-ESTE MES: Ganancia Bs${(cache.gananciaMes || 0).toFixed(2)}
-FINANZAS: Ingresos Bs${(cache.ingresos || 0).toFixed(2)} | Gastos Bs${(cache.gastos || 0).toFixed(2)} | Balance Bs${((cache.ingresos || 0) - (cache.gastos || 0)).toFixed(2)}
-BAJO STOCK (≤3 unidades): ${bajosStock.map(p => `${p.nombre}(${p.cantidad})`).join(', ') || 'ninguno'}
-PRODUCTO MÁS VENDIDO HOY: ${cache.topProductoHoy || 'sin datos'}
+BALANCE: Ingresos Bs${(cache.ingresos || 0).toFixed(2)} | Gastos Bs${(cache.gastos || 0).toFixed(2)}
+`;
+
+  return `Eres un asistente que procesa gastos e ingresos para una app conectada con Siri.
+
+RESPONDE SIEMPRE en JSON válido.
+NO uses markdown.
+NO uses \`\`\`json ni \`\`\` en ningún caso.
+NO agregues texto fuera del JSON.
+
+El JSON debe tener EXACTAMENTE esta estructura:
+
+{
+  "message": "texto natural que Siri debe decir al usuario",
+  "action": "ADD_EXPENSE | ADD_INCOME | SELL_PRODUCT | RESTOCK | NONE",
+  "params": {
+    "descripcion": "string",
+    "monto": number,
+    "categoria": "string",
+    "productId": "string",
+    "qty": number
+  }
+}
 
 REGLAS:
-- CONSULTA → respondé con texto breve natural.
-- ACCIÓN → respondé SOLO este JSON sin texto extra:
-  {"action":"NOMBRE","params":{...},"message":"texto breve para Siri"}
+- "message" SIEMPRE debe existir y ser texto claro y breve en español rioplatense.
+- "action" debe ser:
+  - ADD_EXPENSE → si el usuario gasta dinero
+  - ADD_INCOME → si el usuario gana dinero (que no sea venta de inventario)
+  - SELL_PRODUCT → si el usuario vende algo del INVENTARIO
+  - RESTOCK → si el usuario compra más unidades para el INVENTARIO
+  - NONE → si es solo una pregunta o no se puede procesar
 
-ACCIONES DISPONIBLES:
-SELL_PRODUCT   → params: {productId, qty}
-ADD_EXPENSE    → params: {descripcion, monto, categoria}
-ADD_INCOME     → params: {descripcion, monto, categoria}
-RESTOCK        → params: {productId, qty}
+- "params":
+  - Si no hay datos suficientes, deja campos vacíos ("") o en 0.
+  - monto y qty deben ser números, no strings.
+  - Para ventas o restock, usa el nombre del producto en 'descripcion' y busca su 'productId' en el inventario.
 
-Buscá el productId por nombre en el inventario de arriba.`;
+- SIEMPRE devuelve JSON válido aunque haya errores.
+- Si te hacen una consulta de ventas o stock, usa el action "NONE" y pon la respuesta en "message".
+
+- PROHIBIDO:
+  - usar \`\`\` 
+  - explicar nada
+  - escribir fuera del JSON
+
+DATOS ACTUALES: ${contexto}`;
 }
 
 // ── Llamada a OpenRouter ───────────────────────────────────────────────────
@@ -174,19 +199,23 @@ exports.handler = async (event) => {
     if (jsonMatch) {
       try {
         const parsed = JSON.parse(jsonMatch[0]);
-        if (parsed.action && parsed.params) {
+        if (parsed.message) {
+          message = parsed.message; // Siri siempre lee el mensaje natural
+        }
+        if (parsed.action && parsed.action !== 'NONE') {
           // Escribir acción pendiente para que la web app la procese
           const actionId = Date.now().toString();
           await fsWrite(`shortcut_actions/${uid}/pending/${actionId}`, {
             action: parsed.action,
-            params: JSON.stringify(parsed.params),
+            params: JSON.stringify(parsed.params || {}),
             token: SIRI_TOKEN,
             status: 'pending',
             createdAt: new Date().toISOString(),
           });
-          message = parsed.message || 'Acción registrada. Se procesará cuando abras la app.';
         }
-      } catch (_) { /* no era JSON */ }
+      } catch (e) { 
+        console.error("JSON parse error:", e);
+      }
     }
 
     return { statusCode: 200, headers, body: JSON.stringify({ message }) };

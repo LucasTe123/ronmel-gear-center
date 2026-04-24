@@ -143,24 +143,30 @@ exports.handler = async (event) => {
   const { texto, token } = body;
   const uid = USER_UID || body.userId;
 
-  // ── Validaciones ───────────────────────────────────────────────────────
-  if (!texto) return { statusCode: 400, headers, body: JSON.stringify({ message: 'Falta el campo texto.' }) };
-  if (token !== SIRI_TOKEN) return { statusCode: 401, headers, body: JSON.stringify({ message: 'Token inválido.' }) };
-  if (!uid)   return { statusCode: 500, headers, body: JSON.stringify({ message: 'UID de usuario no configurado en el servidor.' }) };
-  if (!OR_KEY) return { statusCode: 500, headers, body: JSON.stringify({ message: 'OpenRouter key no configurada.' }) };
+  console.log("--- Siri Function Start ---");
+  console.log("Texto recibido:", texto);
+  console.log("UID:", uid);
+
+  if (!OR_KEY) {
+    console.error("Falta OPENROUTER_KEY");
+    return { statusCode: 500, headers, body: JSON.stringify({ message: 'Error interno: Falta la clave de IA en el servidor.' }) };
+  }
 
   try {
     // ── Leer cache público de Firebase ─────────────────────────────────
     const cache = await fsGet(`shortcut_cache/${uid}`) || {};
+    console.log("Cache cargado:", cache.productos ? `${cache.productos.length} productos` : "vacío");
 
     // ── Verificar token del cache ──────────────────────────────────────
     if (cache.token && cache.token !== SIRI_TOKEN) {
+      console.warn("Token de cache no coincide:", cache.token, "vs", SIRI_TOKEN);
       return { statusCode: 401, headers, body: JSON.stringify({ message: 'Token no coincide con el registro del usuario.' }) };
     }
 
     // ── Llamar a la IA ─────────────────────────────────────────────────
     const systemPrompt = buildPrompt(cache);
     const rawResponse  = await callAI(systemPrompt, texto);
+    console.log("Respuesta IA:", rawResponse);
 
     // ── Interpretar si es acción o texto ───────────────────────────────
     let message = rawResponse;

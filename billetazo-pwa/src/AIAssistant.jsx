@@ -211,7 +211,7 @@ export default function AIAssistant() {
       setMessages(m => [...m, { role: 'assistant', text: finalText }]);
     } catch (err) {
       const msg = err?.message || 'Error desconocido';
-      setMessages(m => [...m, { role: 'assistant', text: `❌ No pude procesar tu solicitud: ${msg}` }]);
+      setMessages(m => [...m, { role: 'assistant', text: `❌ Error de Conexión IA: ${msg}` }]);
     } finally {
       setLoading(false);
     }

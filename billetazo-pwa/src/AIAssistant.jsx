@@ -212,16 +212,8 @@ export default function AIAssistant() {
     <>
       {/* Botón flotante */}
       <button
+        className="fab-ai"
         onClick={() => setOpen(o => !o)}
-        style={{
-          position: 'fixed', bottom: 32, right: 32,
-          width: 52, height: 52, borderRadius: '50%',
-          background: 'linear-gradient(135deg,#6e40c9,#0a84ff)',
-          border: 'none', cursor: 'pointer', color: '#fff',
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          boxShadow: '0 4px 20px rgba(110,64,201,0.5)',
-          fontSize: 22, zIndex: 200, transition: 'transform 0.2s',
-        }}
         title="Asistente IA"
       >
         {open ? '✕' : '🤖'}
@@ -229,13 +221,7 @@ export default function AIAssistant() {
 
       {/* Panel */}
       {open && (
-        <div style={{
-          position: 'fixed', right: 24, bottom: 100,
-          width: 370, height: 500,
-          background: '#26262e', border: '1px solid var(--border-color)',
-          borderRadius: 20, display: 'flex', flexDirection: 'column',
-          zIndex: 200, boxShadow: '0 20px 60px rgba(0,0,0,0.6)', overflow: 'hidden',
-        }}>
+        <div className="ai-panel">
           {/* Header */}
           <div style={{ padding: '12px 16px', borderBottom: '1px solid var(--border-color)', display: 'flex', alignItems: 'center', gap: 10, background: 'linear-gradient(135deg,rgba(110,64,201,0.2),rgba(10,132,255,0.1))' }}>
             <div style={{ width: 32, height: 32, borderRadius: '50%', background: 'linear-gradient(135deg,#6e40c9,#0a84ff)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 16 }}>🤖</div>

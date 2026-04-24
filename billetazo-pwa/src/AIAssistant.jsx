@@ -184,7 +184,7 @@ export default function AIAssistant() {
           'X-Title': 'Billetazo',
         },
         body: JSON.stringify({
-          model: 'google/gemini-2.0-flash-lite-001',
+          model: 'google/gemini-2.0-flash-001',
           messages: [
             { role: 'system', content: systemPrompt },
             ...messages.slice(-6).map(m => ({ role: m.role === 'user' ? 'user' : 'assistant', content: m.text })),

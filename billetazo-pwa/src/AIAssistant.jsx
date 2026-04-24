@@ -27,6 +27,7 @@ function fmt(n) {
 }
 
 async function cargarContexto(uid) {
+  if (!uid) throw new Error('Sesión no disponible. Iniciá sesión nuevamente.');
   const [prodsSnap, ventasSnap, finSnap] = await Promise.all([
     getDocs(query(collection(db, 'users', uid, 'productos'))),
     getDocs(query(collection(db, 'users', uid, 'ventas'), orderBy('fecha', 'desc'))),
@@ -34,11 +35,11 @@ async function cargarContexto(uid) {
   ]);
 
   const productos = prodsSnap.docs.map(d => ({ id: d.id, ...d.data() }));
-  const ventas    = ventasSnap.docs.map(d => ({
+  const ventas = ventasSnap.docs.map(d => ({
     id: d.id, ...d.data(),
     fecha: d.data().fecha?.toDate?.()?.toISOString() || new Date().toISOString(),
   }));
-  const finanzas  = finSnap.docs.map(d => ({
+  const finanzas = finSnap.docs.map(d => ({
     id: d.id, ...d.data(),
     fecha: d.data().fecha?.toDate?.()?.toISOString() || new Date().toISOString(),
   }));
@@ -46,8 +47,8 @@ async function cargarContexto(uid) {
   const ventasHoy = getVentasHoy(ventas);
   const ventasMes = getVentasMes ? getVentasMes(ventas) : ventas;
   const resVentas = getResumenVentas(ventas);
-  const ingresos  = finanzas.filter(f => f.tipo === 'ingreso').reduce((a, f) => a + f.monto, 0);
-  const gastos    = finanzas.filter(f => f.tipo === 'gasto').reduce((a, f) => a + f.monto, 0);
+  const ingresos = finanzas.filter(f => f.tipo === 'ingreso').reduce((a, f) => a + f.monto, 0);
+  const gastos = finanzas.filter(f => f.tipo === 'gasto').reduce((a, f) => a + f.monto, 0);
   return { productos, ventas, ventasHoy, resVentas, finanzas, ingresos, gastos };
 }
 
@@ -55,7 +56,7 @@ function buildSystemPrompt(ctx, userName) {
   const { productos, ventasHoy, resVentas, ingresos, gastos } = ctx;
   const bajosStock = productos.filter(p => p.cantidad <= 3);
   const sinStock = productos.filter(p => p.cantidad === 0);
-  
+
   const topVentas = ctx.ventas.reduce((acc, v) => {
     acc[v.nombreProducto] = (acc[v.nombreProducto] || 0) + v.cantidad;
     return acc;
@@ -122,12 +123,12 @@ export default function AIAssistant() {
   const { user } = useAuth();
   const uid = user?.uid;
 
-  const [open, setOpen]        = useState(false);
+  const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState([
     { role: 'assistant', text: '¡Hola! Preguntame lo que quieras sobre tu negocio, o pedime que haga algo.' }
   ]);
-  const [input, setInput]      = useState('');
-  const [loading, setLoading]  = useState(false);
+  const [input, setInput] = useState('');
+  const [loading, setLoading] = useState(false);
   const [productos, setProductos] = useState([]);
   const bottomRef = useRef(null);
 
@@ -142,9 +143,18 @@ export default function AIAssistant() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, open]);
 
+  // Guard: no renderizar si no hay usuario
+  if (user === undefined || !user) return null;
+
   async function sendMessage() {
     const texto = input.trim();
     if (!texto || loading) return;
+
+    if (!uid) {
+      setMessages(m => [...m, { role: 'assistant', text: '⚠️ Tu sesión no está disponible. Cerrá la app y volvé a iniciar sesión.' }]);
+      return;
+    }
+
     setMessages(m => [...m, { role: 'user', text: texto }]);
     setInput('');
     setLoading(true);
@@ -196,11 +206,12 @@ export default function AIAssistant() {
             const result = await ejecutarAccion(uid, parsed.action, parsed.params, ctx.productos);
             finalText = `${parsed.message || ''}\n\n${result}`.trim();
           }
-        } catch (_) {}
+        } catch (_) { }
       }
       setMessages(m => [...m, { role: 'assistant', text: finalText }]);
     } catch (err) {
-      setMessages(m => [...m, { role: 'assistant', text: `❌ Error de IA: ${err.message}` }]);
+      const msg = err?.message || 'Error desconocido';
+      setMessages(m => [...m, { role: 'assistant', text: `❌ No pude procesar tu solicitud: ${msg}` }]);
     } finally {
       setLoading(false);
     }

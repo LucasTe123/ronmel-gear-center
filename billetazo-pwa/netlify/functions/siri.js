@@ -111,7 +111,7 @@ async function callAI(systemPrompt, userText) {
       'X-Title': 'Billetazo',
     },
     body: JSON.stringify({
-      model: 'google/gemini-2.0-flash-exp:free',
+      model: 'google/gemini-2.0-flash-lite-preview-02-05:free',
       messages: [
         { role: 'system', content: systemPrompt },
         { role: 'user',   content: userText },
@@ -120,6 +120,9 @@ async function callAI(systemPrompt, userText) {
     }),
   });
   const json = await r.json();
+  if (json.error) {
+    return `Error de OpenRouter: ${json.error.message}`;
+  }
   return json.choices?.[0]?.message?.content?.trim() || 'No pude procesar la solicitud.';
 }
 

@@ -187,22 +187,22 @@ export default function Home() {
                  <div style={{ fontSize: 11, color: 'var(--text-secondary)' }}>Items</div>
               </div>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px', marginTop: 16 }}>
                <div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ventas Hoy</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
+                  <div className="stat-number" style={{ fontWeight: 700, color: 'var(--text-primary)', fontFamily: 'monospace' }}>
                     <AnimatedNumber value={resVentas.cantidadHoy} />
                   </div>
                </div>
                <div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ganancia Hoy</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--status-success)', fontFamily: 'monospace' }}>
+                  <div className="stat-number" style={{ fontWeight: 700, color: 'var(--status-success)', fontFamily: 'monospace' }}>
                     <AnimatedNumber value={resVentas.gananciaHoy} prefix="+Bs " />
                   </div>
                </div>
                <div>
                   <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>Ganancia Mes</div>
-                  <div style={{ fontSize: 24, fontWeight: 700, color: 'var(--accent-blue-light)', fontFamily: 'monospace' }}>
+                  <div className="stat-number" style={{ fontWeight: 700, color: 'var(--accent-blue-light)', fontFamily: 'monospace' }}>
                     <AnimatedNumber value={resVentas.gananciaMes} prefix="Bs " />
                   </div>
                </div>
@@ -212,19 +212,19 @@ export default function Home() {
           {/* Inventario Resumen */}
           <div className="card">
             <div className="card-title">Inventario Actual</div>
-            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '20px' }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(100px, 1fr))', gap: '16px' }}>
               <div className="metric-group">
                 <span className="metric-label">Total Productos</span>
-                <span className="metric-value" style={{ fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalProductos} /></span>
+                <span className="stat-number" style={{ fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalProductos} /></span>
                 <span className="metric-sub" style={{ color: 'var(--status-success)' }}>Items en stock</span>
               </div>
               <div className="metric-group">
                 <span className="metric-label">Capital Invertido</span>
-                <span className="metric-value" style={{ fontSize: 24, fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalInvertido} prefix="Bs " /></span>
+                <span className="stat-number" style={{ fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalInvertido} prefix="Bs " /></span>
               </div>
               <div className="metric-group">
                 <span className="metric-label">Ganancia Potencial</span>
-                <span className="metric-value" style={{ fontSize: 24, color: 'var(--accent-lime)', fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalGanancia} prefix="+Bs " /></span>
+                <span className="stat-number" style={{ color: 'var(--accent-lime)', fontFamily: 'monospace' }}><AnimatedNumber value={resInv.totalGanancia} prefix="+Bs " /></span>
               </div>
             </div>
           </div>

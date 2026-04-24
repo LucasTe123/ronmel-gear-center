@@ -357,6 +357,11 @@ html, body, #root {
   line-height: 1;
 }
 
+.stat-number {
+  font-size: 24px;
+  line-height: 1.2;
+}
+
 .metric-sub {
   font-size: 13px;
   color: var(--text-muted);
@@ -675,33 +680,59 @@ html, body, #root {
 @media (max-width: 768px) {
   .app-layout {
     flex-direction: column;
-    padding: 16px;
-    gap: 16px;
+    padding: 12px;
+    gap: 12px;
+    padding-bottom: 0; /* Let sidebar touch bottom */
+  }
+  .main-content {
+    padding: 20px 16px;
+    margin-bottom: 12px; /* space before sidebar */
+    overflow-x: hidden; /* Prevent horizontal scrolling */
   }
   .sidebar {
     width: 100%;
-    height: 80px;
+    height: 70px;
     flex-direction: row;
-    padding: 0 20px;
+    padding: 0 16px;
+    justify-content: space-between;
+    order: 2; /* Put at the bottom */
+    margin-bottom: 20px; /* space from phone bottom edge */
   }
   .sidebar-brand {
-    margin-bottom: 0;
-    margin-right: auto;
+    display: none; /* Hide logo on mobile */
   }
   .sidebar-nav {
     flex-direction: row;
-    width: auto;
-    gap: 8px;
+    width: 100%;
+    justify-content: space-around;
+    gap: 4px;
   }
   .sidebar-footer {
-    margin-top: 0;
-    margin-left: 20px;
-    flex-direction: row;
+    display: none; /* Hide profile avatar from bottom bar on mobile to save space */
   }
   .btn-logout {
     display: none;
   }
-  .main-content {
-    padding: 24px 20px;
+  
+  /* Fix tight metrics and layout on mobile */
+  .metric-value {
+    font-size: 28px; /* Smaller font to fit */
+  }
+  .stat-number {
+    font-size: 20px;
+  }
+  .page-title {
+    font-size: 24px;
+  }
+  .card {
+    padding: 16px;
+  }
+  /* Fix floating action button positioning to not overlap with new bottom bar */
+  .fab {
+    bottom: 100px;
+    right: 20px;
+  }
+  .toast-container {
+    bottom: 100px;
   }
 }

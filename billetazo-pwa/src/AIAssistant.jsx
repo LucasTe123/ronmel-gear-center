@@ -54,34 +54,58 @@ async function cargarContexto(uid) {
 }
 
 function buildSystemPrompt(ctx, userName) {
-  const { productos, ventasHoy, resVentas, ingresos, gastos } = ctx;
+  const { productos, ventas, ventasHoy, resVentas, ingresos, gastos, finanzas } = ctx;
   const bajosStock = productos.filter(p => p.cantidad <= 3);
   const sinStock = productos.filter(p => p.cantidad === 0);
 
-  const topVentas = ctx.ventas.reduce((acc, v) => {
-    acc[v.nombreProducto] = (acc[v.nombreProducto] || 0) + v.cantidad;
-    return acc;
-  }, {});
-  const topProductos = Object.keys(topVentas).sort((a, b) => topVentas[b] - topVentas[a]).slice(0, 3);
+  // Últimos 10 gastos e ingresos
+  const ultMovimientos = finanzas.slice(0, 10).map(f =>
+    `[${f.tipo.toUpperCase()}] ${f.descripcion} — Bs${f.monto} (${f.categoria}) — ${new Date(f.fecha).toLocaleDateString('es-BO')}`
+  ).join('\n');
+
+  // Últimas 10 ventas
+  const ultVentas = ventas.slice(0, 10).map(v =>
+    `${v.nombreProducto} x${v.cantidad} — Total Bs${v.total} — ${new Date(v.fecha).toLocaleDateString('es-BO')}`
+  ).join('\n');
+
+  // Stock completo
+  const stockDetallado = productos.map(p =>
+    `[${p.id}] ${p.nombre} — Stock: ${p.cantidad} unidades — Precio venta: Bs${p.precioVenta} — Precio compra: Bs${p.precioCompra}`
+  ).join('\n');
 
   return `Sos Billetazo IA, asistente experto en finanzas de ${userName || 'el usuario'}. Español rioplatense.
 
-INVENTARIO: ${productos.map(p => `[${p.id}] ${p.nombre} (Bs${p.precioVenta})`).join(', ') || 'Sin productos'}
-MÉTRICAS: Hoy ${ventasHoy.length} ventas (+Bs${fmt(resVentas.gananciaHoy)}). Balance: Bs${fmt(ingresos - gastos)}.
-ALERTAS: Agotados: ${sinStock.map(p => p.nombre).join(', ') || '0'}. Bajos: ${bajosStock.map(p => p.nombre).join(', ') || '0'}
+═══ INVENTARIO COMPLETO ═══
+${stockDetallado || 'Sin productos'}
+
+═══ MÉTRICAS ═══
+Ventas hoy: ${ventasHoy.length} — Ganancia hoy: Bs${fmt(resVentas.gananciaHoy)}
+Ingresos totales: Bs${fmt(ingresos)} — Gastos totales: Bs${fmt(gastos)} — Balance: Bs${fmt(ingresos - gastos)}
+
+═══ ALERTAS ═══
+Sin stock: ${sinStock.map(p => p.nombre).join(', ') || 'ninguno'}
+Stock bajo (≤3): ${bajosStock.map(p => `${p.nombre} (${p.cantidad})`).join(', ') || 'ninguno'}
+
+═══ ÚLTIMAS VENTAS ═══
+${ultVentas || 'Sin ventas registradas'}
+
+═══ ÚLTIMOS MOVIMIENTOS (gastos e ingresos) ═══
+${ultMovimientos || 'Sin movimientos registrados'}
 
 REGLAS CRÍTICAS PARA ENTENDER TEXTO:
-1. El usuario escribirá textos largos como "hoy fui al super y compre 3 latas de atun por 50".
-2. DEBES EXTRAER SÓLO LO IMPORTANTE para la 'descripcion'. Ejemplo: "3 latas de atun". NUNCA guardes "hoy fui y compre...".
-3. Identifica si es un GASTO (ADD_EXPENSE) o un INGRESO (ADD_INCOME) y el 'monto'.
-4. Asigna una 'categoria' estricta: Alimentación, Salud y Cuidado, Ropa y Accesorios, Hogar y Servicios, Transporte, Educación y Trabajo, Entretenimiento, Ingresos.
+1. El usuario escribirá textos como "hoy fui al super y compre 3 latas de atun por 50".
+2. EXTRAÉ SÓLO LO IMPORTANTE para la 'descripcion'. Ejemplo: "3 latas de atún".
+3. Identificá si es GASTO (ADD_EXPENSE) o INGRESO (ADD_INCOME) y el 'monto'.
+4. Categorías válidas: Alimentación, Salud y Cuidado, Ropa y Accesorios, Hogar y Servicios, Transporte, Educación y Trabajo, Entretenimiento, Ingresos.
 
-Si te piden acciones, responde SÓLO este JSON (sin formato Markdown, sin texto extra):
+Si te piden acciones, responde SÓLO este JSON (sin Markdown, sin texto extra):
 {"action":"NOMBRE","params":{"descripcion":"resumen conciso","monto":100,"categoria":"Alimentación"},"message":"✅ Gasto registrado."}
 
-ACCIONES:
+ACCIONES DISPONIBLES:
 SELL_PRODUCT({productId,qty}), ADD_PRODUCT({nombre,precioCompra,precioVenta,cantidad}),
-ADD_INCOME({descripcion,monto,categoria}), ADD_EXPENSE({descripcion,monto,categoria})`;
+ADD_INCOME({descripcion,monto,categoria}), ADD_EXPENSE({descripcion,monto,categoria})
+
+Si es una pregunta (no una acción), respondé en texto natural con los datos que tenés arriba.`;
 }
 
 async function ejecutarAccion(uid, action, params, productos) {

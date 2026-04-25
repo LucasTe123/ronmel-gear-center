@@ -255,8 +255,8 @@ export default function AIAssistant() {
             ))}
             {loading && (
               <div style={{ display: 'flex', gap: 5, paddingLeft: 4 }}>
-                {[0,1,2].map(i => (
-                  <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-muted)', animation: `pulse 1.2s ${i*0.2}s infinite` }} />
+                {[0, 1, 2].map(i => (
+                  <div key={i} style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--text-muted)', animation: `pulse 1.2s ${i * 0.2}s infinite` }} />
                 ))}
               </div>
             )}

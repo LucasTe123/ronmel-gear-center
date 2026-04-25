@@ -64,6 +64,20 @@ function buildCache(productos, ventas, finanzas) {
       precioVenta: p.precioVenta,
       precioCompra: p.precioCompra,
     })),
+    ultimosMovimientos: finanzas.slice(0, 10).map(f => ({
+      tipo: f.tipo,
+      descripcion: f.descripcion,
+      monto: f.monto,
+      categoria: f.categoria || 'Otro',
+      fecha: f.fecha,
+    })),
+    ultimasVentas: ventas.slice(0, 10).map(v => ({
+      nombre: v.nombreProducto,
+      cantidad: v.cantidad,
+      total: v.total,
+      ganancia: v.ganancia,
+      fecha: v.fecha,
+    })),
   };
 }
 

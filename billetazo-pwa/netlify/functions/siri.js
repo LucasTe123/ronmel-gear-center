@@ -18,11 +18,11 @@
 //   USER_UID         = (el UID del usuario, lo copiás de Ajustes en la app)
 // ================================================================
 
-const SIRI_TOKEN    = process.env.VITE_SIRI_TOKEN || process.env.SIRI_TOKEN || 'billetazo-siri-token-2025';
-const OR_KEY        = process.env.VITE_OPENROUTER_KEY || process.env.OPENROUTER_KEY;
-const FB_API_KEY    = process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
-const FB_PROJECT    = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT || 'billetazo-dba3a';
-const USER_UID      = process.env.USER_UID;
+const SIRI_TOKEN = process.env.VITE_SIRI_TOKEN || process.env.SIRI_TOKEN || 'billetazo-siri-token-2025';
+const OR_KEY = process.env.VITE_OPENROUTER_KEY || process.env.OPENROUTER_KEY;
+const FB_API_KEY = process.env.VITE_FIREBASE_API_KEY || process.env.FIREBASE_API_KEY;
+const FB_PROJECT = process.env.VITE_FIREBASE_PROJECT_ID || process.env.FIREBASE_PROJECT || 'billetazo-dba3a';
+const USER_UID = process.env.USER_UID;
 
 const FIRESTORE_BASE = `https://firestore.googleapis.com/v1/projects/${FB_PROJECT}/databases/(default)/documents`;
 
@@ -46,12 +46,12 @@ async function fsWrite(path, data) {
 function parseFirestoreDoc(fields) {
   const out = {};
   for (const [k, v] of Object.entries(fields)) {
-    if (v.stringValue !== undefined)  out[k] = v.stringValue;
+    if (v.stringValue !== undefined) out[k] = v.stringValue;
     else if (v.integerValue !== undefined) out[k] = Number(v.integerValue);
-    else if (v.doubleValue !== undefined)  out[k] = Number(v.doubleValue);
+    else if (v.doubleValue !== undefined) out[k] = Number(v.doubleValue);
     else if (v.booleanValue !== undefined) out[k] = v.booleanValue;
-    else if (v.arrayValue)  out[k] = (v.arrayValue.values || []).map(i => parseFirestoreDoc(i.mapValue?.fields || {}));
-    else if (v.mapValue)    out[k] = parseFirestoreDoc(v.mapValue.fields || {});
+    else if (v.arrayValue) out[k] = (v.arrayValue.values || []).map(i => parseFirestoreDoc(i.mapValue?.fields || {}));
+    else if (v.mapValue) out[k] = parseFirestoreDoc(v.mapValue.fields || {});
     else out[k] = null;
   }
   return out;
@@ -60,7 +60,7 @@ function parseFirestoreDoc(fields) {
 function toFirestoreFields(obj) {
   const out = {};
   for (const [k, v] of Object.entries(obj)) {
-    if (typeof v === 'string')  out[k] = { stringValue: v };
+    if (typeof v === 'string') out[k] = { stringValue: v };
     else if (typeof v === 'number') out[k] = Number.isInteger(v) ? { integerValue: String(v) } : { doubleValue: v };
     else if (typeof v === 'boolean') out[k] = { booleanValue: v };
     else if (Array.isArray(v)) out[k] = { arrayValue: { values: v.map(i => ({ mapValue: { fields: toFirestoreFields(i) } })) } };
@@ -73,23 +73,38 @@ function buildPrompt(cache) {
   const prods = cache.productos || [];
   const bajosStock = prods.filter(p => p.cantidad <= 3);
 
-  const contexto = `
-INVENTARIO: ${prods.map(p => `[${p.id}] ${p.nombre} (Stock: ${p.cantidad}, Bs${p.precioVenta})`).join(', ') || 'Sin productos'}
-HOY: ${cache.cantidadHoy || 0} ventas — Ganancia Bs${(cache.gananciaHoy || 0).toFixed(2)}
-BALANCE: Ingresos Bs${(cache.ingresos || 0).toFixed(2)} | Gastos Bs${(cache.gastos || 0).toFixed(2)}
-`;
+  const stockDetallado = prods.map(p =>
+    `[${p.id}] ${p.nombre} — Stock: ${p.cantidad} uds — Venta: Bs${p.precioVenta} — Compra: Bs${p.precioCompra}`
+  ).join('\n') || 'Sin productos';
 
-  return `Eres un asistente que procesa gastos e ingresos para una app conectada con Siri.
+  const movimientos = (cache.ultimosMovimientos || []).map(f =>
+    `[${f.tipo.toUpperCase()}] ${f.descripcion} — Bs${f.monto} (${f.categoria}) — ${new Date(f.fecha).toLocaleDateString('es-BO')}`
+  ).join('\n') || 'Sin movimientos';
 
-RESPONDE SIEMPRE en JSON válido.
-NO uses markdown.
-NO uses \`\`\`json ni \`\`\` en ningún caso.
-NO agregues texto fuera del JSON.
+  const ventasRecientes = (cache.ultimasVentas || []).map(v =>
+    `${v.nombre} x${v.cantidad} — Bs${v.total} — ${new Date(v.fecha).toLocaleDateString('es-BO')}`
+  ).join('\n') || 'Sin ventas';
 
-El JSON debe tener EXACTAMENTE esta estructura:
+  return `Eres un asistente financiero de Billetazo. Español rioplatense.
 
+═══ INVENTARIO ═══
+${stockDetallado}
+Stock bajo (≤3): ${bajosStock.map(p => `${p.nombre} (${p.cantidad})`).join(', ') || 'ninguno'}
+
+═══ MÉTRICAS ═══
+Ventas hoy: ${cache.cantidadHoy || 0} — Ganancia hoy: Bs${(cache.gananciaHoy || 0).toFixed(2)}
+Ingresos totales: Bs${(cache.ingresos || 0).toFixed(2)} — Gastos totales: Bs${(cache.gastos || 0).toFixed(2)}
+Balance: Bs${((cache.ingresos || 0) - (cache.gastos || 0)).toFixed(2)}
+
+═══ ÚLTIMOS MOVIMIENTOS ═══
+${movimientos}
+
+═══ ÚLTIMAS VENTAS ═══
+${ventasRecientes}
+
+RESPONDE SIEMPRE en JSON válido sin markdown:
 {
-  "message": "texto natural que Siri debe decir al usuario",
+  "message": "texto natural para Siri",
   "action": "ADD_EXPENSE | ADD_INCOME | SELL_PRODUCT | RESTOCK | NONE",
   "params": {
     "descripcion": "string",
@@ -101,28 +116,12 @@ El JSON debe tener EXACTAMENTE esta estructura:
 }
 
 REGLAS:
-- "message" SIEMPRE debe existir y ser texto claro y breve en español rioplatense.
-- "action" debe ser:
-  - ADD_EXPENSE → si el usuario gasta dinero
-  - ADD_INCOME → si el usuario gana dinero (que no sea venta de inventario)
-  - SELL_PRODUCT → si el usuario vende algo del INVENTARIO
-  - RESTOCK → si el usuario compra más unidades para el INVENTARIO
-  - NONE → si es solo una pregunta o no se puede procesar
-
-- "params":
-  - Si no hay datos suficientes, deja campos vacíos ("") o en 0.
-  - monto y qty deben ser números, no strings.
-  - Para ventas o restock, usa el nombre del producto en 'descripcion' y busca su 'productId' en el inventario.
-
-- SIEMPRE devuelve JSON válido aunque haya errores.
-- Si te hacen una consulta de ventas o stock, usa el action "NONE" y pon la respuesta en "message".
-
-- PROHIBIDO:
-  - usar \`\`\` 
-  - explicar nada
-  - escribir fuera del JSON
-
-DATOS ACTUALES: ${contexto}`;
+- Si es pregunta → action: NONE, respondé en message con los datos de arriba
+- Si es gasto → ADD_EXPENSE
+- Si es ingreso → ADD_INCOME
+- Si vende inventario → SELL_PRODUCT
+- Si repone stock → RESTOCK
+- NUNCA uses markdown ni texto fuera del JSON`;
 }
 
 // ── Llamada a OpenRouter ───────────────────────────────────────────────────
@@ -139,7 +138,7 @@ async function callAI(systemPrompt, userText) {
       model: 'google/gemini-2.0-flash-001',
       messages: [
         { role: 'system', content: systemPrompt },
-        { role: 'user',   content: userText },
+        { role: 'user', content: userText },
       ],
       max_tokens: 300,
     }),
@@ -160,7 +159,7 @@ exports.handler = async (event) => {
   };
 
   if (event.httpMethod === 'OPTIONS') return { statusCode: 204, headers, body: '' };
-  if (event.httpMethod !== 'POST')   return { statusCode: 405, headers, body: JSON.stringify({ message: 'Método no permitido.' }) };
+  if (event.httpMethod !== 'POST') return { statusCode: 405, headers, body: JSON.stringify({ message: 'Método no permitido.' }) };
 
   let body;
   try { body = JSON.parse(event.body || '{}'); } catch { body = {}; }
@@ -190,7 +189,7 @@ exports.handler = async (event) => {
 
     // ── Llamar a la IA ─────────────────────────────────────────────────
     const systemPrompt = buildPrompt(cache);
-    const rawResponse  = await callAI(systemPrompt, texto);
+    const rawResponse = await callAI(systemPrompt, texto);
     console.log("Respuesta IA:", rawResponse);
 
     // ── Interpretar si es acción o texto ───────────────────────────────
@@ -213,7 +212,7 @@ exports.handler = async (event) => {
             createdAt: new Date().toISOString(),
           });
         }
-      } catch (e) { 
+      } catch (e) {
         console.error("JSON parse error:", e);
       }
     }

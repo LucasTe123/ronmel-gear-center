@@ -22,22 +22,22 @@ function fmt2(n) { return Number(n || 0).toFixed(2); }
 
 // ── Construir objeto cache con todos los datos relevantes ─────────────────
 function buildCache(productos, ventas, finanzas) {
-  const ahora  = new Date();
-  const hoy    = ahora.toDateString();
-  const ayer   = new Date(ahora - 86400000).toDateString();
-  const mes    = ahora.getMonth();
-  const anio   = ahora.getFullYear();
+  const ahora = new Date();
+  const hoy = ahora.toDateString();
+  const ayer = new Date(ahora - 86400000).toDateString();
+  const mes = ahora.getMonth();
+  const anio = ahora.getFullYear();
 
-  const ventasHoy  = ventas.filter(v => new Date(v.fecha).toDateString() === hoy);
+  const ventasHoy = ventas.filter(v => new Date(v.fecha).toDateString() === hoy);
   const ventasAyer = ventas.filter(v => new Date(v.fecha).toDateString() === ayer);
-  const ventasMes  = ventas.filter(v => {
+  const ventasMes = ventas.filter(v => {
     const f = new Date(v.fecha);
     return f.getMonth() === mes && f.getFullYear() === anio;
   });
 
-  const gananciaHoy  = ventasHoy.reduce((a, v) => a + (v.ganancia || 0), 0);
+  const gananciaHoy = ventasHoy.reduce((a, v) => a + (v.ganancia || 0), 0);
   const gananciaAyer = ventasAyer.reduce((a, v) => a + (v.ganancia || 0), 0);
-  const gananciaMes  = ventasMes.reduce((a, v) => a + (v.ganancia || 0), 0);
+  const gananciaMes = ventasMes.reduce((a, v) => a + (v.ganancia || 0), 0);
 
   // Producto más vendido hoy
   const conteo = {};
@@ -45,23 +45,23 @@ function buildCache(productos, ventas, finanzas) {
   const topProductoHoy = Object.entries(conteo).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
 
   const ingresos = finanzas.filter(f => f.tipo === 'ingreso').reduce((a, f) => a + f.monto, 0);
-  const gastos   = finanzas.filter(f => f.tipo === 'gasto').reduce((a, f) => a + f.monto, 0);
+  const gastos = finanzas.filter(f => f.tipo === 'gasto').reduce((a, f) => a + f.monto, 0);
 
   return {
     token: SIRI_TOKEN,
     updatedAt: new Date().toISOString(),
-    cantidadHoy:    ventasHoy.length,
-    gananciaHoy:    parseFloat(fmt2(gananciaHoy)),
-    gananciaAyer:   parseFloat(fmt2(gananciaAyer)),
-    gananciaMes:    parseFloat(fmt2(gananciaMes)),
-    ingresos:       parseFloat(fmt2(ingresos)),
-    gastos:         parseFloat(fmt2(gastos)),
+    cantidadHoy: ventasHoy.length,
+    gananciaHoy: parseFloat(fmt2(gananciaHoy)),
+    gananciaAyer: parseFloat(fmt2(gananciaAyer)),
+    gananciaMes: parseFloat(fmt2(gananciaMes)),
+    ingresos: parseFloat(fmt2(ingresos)),
+    gastos: parseFloat(fmt2(gastos)),
     topProductoHoy,
     productos: productos.map(p => ({
-      id:           p.id,
-      nombre:       p.nombre,
-      cantidad:     p.cantidad,
-      precioVenta:  p.precioVenta,
+      id: p.id,
+      nombre: p.nombre,
+      cantidad: p.cantidad,
+      precioVenta: p.precioVenta,
       precioCompra: p.precioCompra,
     })),
   };
@@ -74,8 +74,8 @@ export default function ShortcutSync() {
   useEffect(() => {
     if (!uid) return;
     let productos = [];
-    let ventas    = [];
-    let finanzas  = [];
+    let ventas = [];
+    let finanzas = [];
 
     // Función para re-sincronizar el cache
     async function sync() {
@@ -87,24 +87,14 @@ export default function ShortcutSync() {
       }
     }
 
-    // Suscribirse a productos, ventas y finanzas
-    const unsubP = subscribeProductos(uid, p => { productos = p; sync(); });
-    const unsubV = subscribeVentas(uid, v => { ventas = v; sync(); });
-
-    // Suscribirse a finanzas
-    const finRef = collection(db, 'users', uid, 'finanzas');
-    const unsubF = onSnapshot(query(finRef, orderBy('fecha', 'desc')), snap => {
-      finanzas = snap.docs.map(d => ({
-        id: d.id, ...d.data(),
-        fecha: d.data().fecha?.toDate?.()?.toISOString() || new Date().toISOString(),
-      }));
-      sync();
-    });
-
     // ── Escuchar acciones pendientes del Atajo ─────────────────────────
     const pendingRef = collection(db, 'shortcut_actions', uid, 'pending');
+    const procesando = new Set();
+
     const unsubA = onSnapshot(pendingRef, async snap => {
       for (const docSnap of snap.docs) {
+        if (procesando.has(docSnap.id)) continue;
+
         const action = docSnap.data();
         if (action.status !== 'pending') continue;
         if (action.token !== SIRI_TOKEN) { await deleteDoc(docSnap.ref); continue; }
@@ -113,7 +103,8 @@ export default function ShortcutSync() {
         try { params = typeof action.params === 'string' ? JSON.parse(action.params) : action.params; }
         catch { await deleteDoc(docSnap.ref); continue; }
 
-        // Ejecutar acción
+        procesando.add(docSnap.id);
+
         try {
           switch (action.action) {
             case 'SELL_PRODUCT':
@@ -143,8 +134,9 @@ export default function ShortcutSync() {
           }
         } catch (e) {
           console.warn('ShortcutSync: error al ejecutar acción', e);
+          procesando.delete(docSnap.id);
         }
-        // Eliminar acción procesada
+
         await deleteDoc(docSnap.ref);
       }
     });
@@ -152,5 +144,5 @@ export default function ShortcutSync() {
     return () => { unsubP(); unsubV(); unsubF(); unsubA(); };
   }, [uid]);
 
-  return null; // componente invisible
+  return null;
 }

@@ -21,6 +21,7 @@ import {
 import { collection as col, addDoc, serverTimestamp } from 'firebase/firestore';
 
 const OR_KEY = import.meta.env.VITE_OPENROUTER_KEY || '';
+console.log('KEY ACTUAL:', OR_KEY ? OR_KEY.slice(0, 25) + '...' : 'VACÍA ❌');
 
 function fmt(n) {
   return Number(n || 0).toLocaleString('es-BO', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
